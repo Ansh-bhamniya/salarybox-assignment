@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 
 class PrimaryButton extends StatelessWidget {
-  const PrimaryButton({
-    super.key,
-    required this.label,
-    required this.onPressed,
-    this.loading = false,
-  });
+  const PrimaryButton({super.key, required this.label, required this.onPressed, this.loading = false});
 
   final String label;
   final VoidCallback? onPressed;
@@ -16,7 +11,8 @@ class PrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return FilledButton(
       onPressed: onPressed,
-      style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+      // Full width and the same height as the text fields (60) above it.
+      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(60)),
       child: loading
           ? SizedBox(
               height: 20,

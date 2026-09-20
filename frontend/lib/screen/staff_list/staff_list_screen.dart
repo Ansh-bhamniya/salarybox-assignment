@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../utils/routes.dart';
 import '../../config/di/service_locator.dart';
+import '../../widgets/app_logo.dart';
 import '../../widgets/content_width.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/status_chip.dart';
@@ -14,6 +16,7 @@ import '../../widgets/staff_avatar.dart';
 import '../../config/theme/app_spacing.dart';
 import '../../config/theme/app_theme.dart';
 import '../../config/theme/app_icons.dart';
+import '../../widgets/app_fab.dart';
 
 class StaffListScreen extends StatelessWidget {
   const StaffListScreen({super.key});
@@ -24,7 +27,7 @@ class StaffListScreen extends StatelessWidget {
       create: (_) => sl<StaffListCubit>(),
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Staff'),
+          title: const AppLogo(height: 30),
           actions: [
             const ThemeToggleButton(),
             IconButton(
@@ -55,11 +58,8 @@ class StaffListScreen extends StatelessWidget {
         // Builder: this button's own context must sit *below* the
         // BlocProvider above, or read<StaffListCubit>() can't find it.
         floatingActionButton: Builder(
-          builder: (context) => FloatingActionButton.extended(
-            onPressed: () => _openAddStaff(context),
-            icon: const Icon(AppIcons.addStaff),
-            label: const Text('Add staff'),
-          ),
+          builder: (context) =>
+              AppFab(icon: AppIcons.add, tooltip: 'Add staff', onPressed: () => _openAddStaff(context)),
         ),
       ),
     );
@@ -67,8 +67,15 @@ class StaffListScreen extends StatelessWidget {
 }
 
 Future<void> _openAddStaff(BuildContext context) async {
-  await context.push('/staff/add');
-  if (context.mounted) context.read<StaffListCubit>().load();
+  final cubit = context.read<StaffListCubit>();
+  final router = GoRouter.of(context);
+
+  final added = await router.push<Staff>(Routes.addStaff);
+  cubit.load(); // the new staff shows up straight away
+  if (added == null) return;
+
+  await router.push(Routes.enrolOf(added.id), extra: added.name);
+  cubit.load(); // enrolling changes its status
 }
 
 class _StaffList extends StatelessWidget {
@@ -121,7 +128,7 @@ class _StaffCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () async {
-          await context.push('/staff/${staff.id}');
+          await context.push(Routes.staffProfileOf(staff.id));
           // Enrolling from the profile changes this row's status.
           if (context.mounted) context.read<StaffListCubit>().load();
         },
@@ -144,17 +151,20 @@ class _StaffCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       'ID: ${staff.employeeId}',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
               staff.isEnrolled
-                  ? StatusChip(label: 'Enrolled', icon: AppIcons.checkFilled, color: Theme.of(context).colorScheme.onSurface)
+                  ? StatusChip(
+                      label: 'Enrolled',
+                      icon: AppIcons.checkFilled,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    )
                   : StatusChip(
                       label: 'Enrol face',
                       icon: AppIcons.warning,

@@ -9,4 +9,3 @@ class LoadHomeThemeEvent extends HomeThemeEvent {
 class ToggleHomeThemeEvent extends HomeThemeEvent {
   const ToggleHomeThemeEvent();
 }
-

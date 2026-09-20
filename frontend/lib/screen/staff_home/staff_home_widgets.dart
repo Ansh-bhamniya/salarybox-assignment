@@ -27,7 +27,10 @@ class ProfileButton extends StatelessWidget {
         onTap: () => _showProfileSheet(context, staff, onLogout),
         child: Container(
           padding: const EdgeInsets.all(2),
-          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: scheme.outlineVariant, width: 1.5)),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: scheme.outlineVariant, width: 1.5),
+          ),
           child: StaffAvatar(name: staff.name, photoUrl: staff.enrollmentPhotoUrl, radius: 24),
         ),
       ),
@@ -79,7 +82,10 @@ Future<void> _showProfileSheet(BuildContext context, Staff staff, VoidCallback o
                 leading: Container(
                   width: 44,
                   height: 44,
-                  decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: scheme.outlineVariant)),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: scheme.outlineVariant),
+                  ),
                   child: Icon(AppIcons.logout, size: 20, color: scheme.onSurface),
                 ),
                 title: Text('Log out', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
@@ -115,10 +121,9 @@ class IdPill extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             'ID $employeeId',
-            style: Theme.of(context)
-                .textTheme
-                .labelLarge
-                ?.copyWith(fontWeight: FontWeight.w700, color: scheme.onPrimaryContainer),
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, color: scheme.onPrimaryContainer),
           ),
         ],
       ),
@@ -238,8 +243,11 @@ class ActivityTile extends StatelessWidget {
                 children: [
                   Text(
                     DateFormat('d').format(ts),
-                    style: theme.textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w800, height: 1.1, color: scheme.onPrimaryContainer),
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      height: 1.1,
+                      color: scheme.onPrimaryContainer,
+                    ),
                   ),
                   Text(
                     DateFormat('EEE').format(ts).toUpperCase(),

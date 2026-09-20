@@ -12,6 +12,7 @@ import '../../bloc/auth/auth_cubit.dart';
 import '../../bloc/mark_attendance/mark_attendance_cubit.dart';
 import '../../bloc/mark_attendance/mark_attendance_state.dart';
 import '../../config/theme/app_icons.dart';
+import '../../widgets/app_back_button.dart';
 
 class MarkAttendanceScreen extends StatelessWidget {
   const MarkAttendanceScreen({super.key});
@@ -20,8 +21,7 @@ class MarkAttendanceScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = context.read<AuthCubit>().state.session!;
     return BlocProvider(
-      create: (_) =>
-          sl<MarkAttendanceCubit>(param1: session.staffId!)..initializeCamera(),
+      create: (_) => sl<MarkAttendanceCubit>(param1: session.staffId!)..initializeCamera(),
       child: const _MarkAttendanceView(),
     );
   }
@@ -38,7 +38,12 @@ class _MarkAttendanceView extends StatelessWidget {
       backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
+        leading: const AppBackButton(onDark: true),
+        leadingWidth: AppBackButton.leadingWidth,
         title: const Text('Mark attendance'),
+        titleTextStyle: Theme.of(
+          context,
+        ).textTheme.titleLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -47,17 +52,11 @@ class _MarkAttendanceView extends StatelessWidget {
       ),
       body: BlocConsumer<MarkAttendanceCubit, MarkAttendanceState>(
         listenWhen: (previous, current) =>
-            current.status == MarkAttendanceStatus.cameraReady &&
-            current.errorMessage != null,
+            current.status == MarkAttendanceStatus.cameraReady && current.errorMessage != null,
         listener: (context, state) {
           ScaffoldMessenger.of(context)
             ..hideCurrentSnackBar()
-            ..showSnackBar(
-              SnackBar(
-                content: Text(state.errorMessage!),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
+            ..showSnackBar(SnackBar(content: Text(state.errorMessage!), behavior: SnackBarBehavior.floating));
         },
         builder: (context, state) => _buildBody(context, state),
       ),
@@ -76,9 +75,7 @@ class _MarkAttendanceView extends StatelessWidget {
 
     switch (state.status) {
       case MarkAttendanceStatus.initial:
-        return const Center(
-          child: CircularProgressIndicator(color: Colors.white),
-        );
+        return const Center(child: CircularProgressIndicator(color: Colors.white));
 
       case MarkAttendanceStatus.error:
         return CameraStatusView(
@@ -109,8 +106,7 @@ class _MarkAttendanceView extends StatelessWidget {
           icon: AppIcons.success,
           color: Theme.of(context).colorScheme.primaryFixedDim,
           title: 'Attendance recorded',
-          message:
-              'Your face, time and location were saved.${_scoreNote(state)}',
+          message: 'Your face, time and location were saved.${_scoreNote(state)}',
           primaryLabel: 'Done',
           onPrimary: () => context.pop(true),
         );
@@ -121,11 +117,7 @@ class _MarkAttendanceView extends StatelessWidget {
         final processing = state.status == MarkAttendanceStatus.processing;
         return Stack(
           children: [
-            FaceCameraView(
-              camera: cubit.camera,
-              busy: processing,
-              onCapture: cubit.markAttendance,
-            ),
+            FaceCameraView(camera: cubit.camera, busy: processing, onCapture: cubit.markAttendance),
             LoadingOverlay(visible: processing, message: 'Verifying face…'),
           ],
         );

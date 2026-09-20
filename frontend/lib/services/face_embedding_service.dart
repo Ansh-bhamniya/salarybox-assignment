@@ -19,9 +19,7 @@ import '../models/face_match_result.dart';
 /// crop to a unit-length vector. Two photos of the same person land close
 /// together (high cosine similarity); different people land far apart.
 class FaceEmbeddingService {
-  final FaceDetector _detector = FaceDetector(
-    options: FaceDetectorOptions(performanceMode: FaceDetectorMode.accurate),
-  );
+  final FaceDetector _detector = FaceDetector(options: FaceDetectorOptions(performanceMode: FaceDetectorMode.accurate));
 
   Future<Interpreter>? _interpreterFuture;
 
@@ -175,10 +173,7 @@ class FaceEmbeddingService {
     if (!kReleaseMode) {
       debugPrint('[face] similarity=${similarity.toStringAsFixed(3)} threshold=${Env.faceMatchThreshold}');
     }
-    return FaceMatchResult(
-      isMatch: similarity >= Env.faceMatchThreshold,
-      similarity: similarity,
-    );
+    return FaceMatchResult(isMatch: similarity >= Env.faceMatchThreshold, similarity: similarity);
   }
 
   /// Different lengths (e.g. an enrolment made before this model existed)

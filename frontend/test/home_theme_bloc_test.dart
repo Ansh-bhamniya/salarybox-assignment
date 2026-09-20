@@ -18,11 +18,11 @@ Future<HomeThemeState> _settled(HomeThemeBloc bloc, ThemeMode mode) =>
 
 void main() {
   group('HomeThemeBloc', () {
-    test('defaults to dark when nothing is saved yet', () async {
+    test('defaults to light when nothing is saved yet', () async {
       await _prefs();
       final bloc = HomeThemeBloc();
       expect(bloc.state.isLoading, isTrue); // still loading on the first frame
-      expect((await _settled(bloc, ThemeMode.dark)).mode, ThemeMode.dark);
+      expect((await _settled(bloc, ThemeMode.light)).mode, ThemeMode.light);
       await bloc.close();
     });
 
@@ -62,8 +62,9 @@ void main() {
     });
   });
 
-  testWidgets('the toggle button flips the global theme; MaterialApp rebuilds only when the mode changes',
-      (tester) async {
+  testWidgets('the toggle button flips the global theme; MaterialApp rebuilds only when the mode changes', (
+    tester,
+  ) async {
     // Real async work (plugin storage) must run outside the widget test's fake clock.
     await tester.runAsync(() => _prefs({'theme_mode': 'ThemeMode.light'}));
     final bloc = HomeThemeBloc();
@@ -86,7 +87,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle(); // the saved mode finishes loading (dark -> light)
+    await tester.pumpAndSettle(); // the saved mode finishes loading
 
     Brightness brightness() => Theme.of(tester.element(find.byType(ThemeToggleButton))).brightness;
     expect(brightness(), Brightness.light);

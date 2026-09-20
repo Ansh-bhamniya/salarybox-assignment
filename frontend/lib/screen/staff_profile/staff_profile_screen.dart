@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../utils/routes.dart';
 import '../../config/di/service_locator.dart';
 import '../../widgets/content_width.dart';
 import '../../widgets/error_view.dart';
@@ -14,6 +15,7 @@ import '../../config/theme/app_theme.dart';
 import '../../widgets/section_title.dart';
 import '../../config/theme/app_radius.dart';
 import '../../config/theme/app_icons.dart';
+import '../../widgets/app_back_button.dart';
 
 class StaffProfileScreen extends StatelessWidget {
   const StaffProfileScreen({super.key, required this.staffId});
@@ -37,7 +39,11 @@ class _StaffProfileView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Staff profile')),
+      appBar: AppBar(
+        leading: const AppBackButton(),
+        leadingWidth: AppBackButton.leadingWidth,
+        title: const Text('Staff profile'),
+      ),
       body: BlocBuilder<StaffProfileCubit, StaffProfileState>(
         builder: (context, state) {
           switch (state.status) {
@@ -64,10 +70,7 @@ class _StaffProfileView extends StatelessWidget {
                             children: [
                               StaffAvatar(name: staff.name, photoUrl: staff.enrollmentPhotoUrl, radius: 48),
                               const SizedBox(height: 16),
-                              Text(
-                                staff.name,
-                                style: AppTheme.display(context, size: 26),
-                              ),
+                              Text(staff.name, style: AppTheme.display(context, size: 26)),
                               const SizedBox(height: 4),
                               Text(
                                 'ID: ${staff.employeeId}',
@@ -89,15 +92,15 @@ class _StaffProfileView extends StatelessWidget {
                               SizedBox(
                                 width: double.infinity,
                                 child: staff.isEnrolled
-                                    ? OutlinedButton.icon(
+                                    ? FilledButton.icon(
                                         icon: const Icon(AppIcons.refresh),
                                         label: const Text('Re-enrol face'),
-                                        onPressed: () => context.push('/staff/$staffId/enroll', extra: staff.name),
+                                        onPressed: () => context.push(Routes.enrolOf(staffId), extra: staff.name),
                                       )
                                     : FilledButton.icon(
                                         icon: const Icon(AppIcons.face),
                                         label: const Text('Enrol face'),
-                                        onPressed: () => context.push('/staff/$staffId/enroll', extra: staff.name),
+                                        onPressed: () => context.push(Routes.enrolOf(staffId), extra: staff.name),
                                       ),
                               ),
                             ],
@@ -208,7 +211,11 @@ class _AttendanceTile extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Flexible(child: InteractiveViewer(child: _SelfieImage(url: record.selfieUrl, fit: BoxFit.contain))),
+            Flexible(
+              child: InteractiveViewer(
+                child: _SelfieImage(url: record.selfieUrl, fit: BoxFit.contain),
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.all(16),
               child: Text(

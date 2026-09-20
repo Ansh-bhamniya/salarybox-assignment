@@ -21,7 +21,7 @@ class ThemeModeHelper {
       case "ThemeMode.light":
         return ThemeMode.light;
       default:
-        return ThemeMode.dark;
+        return ThemeMode.light;
     }
   }
 }

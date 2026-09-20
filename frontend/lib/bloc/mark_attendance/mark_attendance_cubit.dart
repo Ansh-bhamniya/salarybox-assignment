@@ -28,12 +28,12 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
     required FaceEmbeddingService embeddingService,
     required StaffService staffService,
     required AttendanceService attendanceService,
-  })  : _staffId = staffId,
-        _camera = camera,
-        _embeddingService = embeddingService,
-        _staffService = staffService,
-        _attendanceService = attendanceService,
-        super(const MarkAttendanceState());
+  }) : _staffId = staffId,
+       _camera = camera,
+       _embeddingService = embeddingService,
+       _staffService = staffService,
+       _attendanceService = attendanceService,
+       super(const MarkAttendanceState());
 
   final String _staffId;
   final CameraCaptureController _camera;
@@ -51,10 +51,12 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
       await _camera.initialize();
       emit(const MarkAttendanceState(status: MarkAttendanceStatus.cameraReady));
     } catch (_) {
-      emit(const MarkAttendanceState(
-        status: MarkAttendanceStatus.error,
-        errorMessage: 'Could not open the camera. Check that camera access is allowed for this app.',
-      ));
+      emit(
+        const MarkAttendanceState(
+          status: MarkAttendanceStatus.error,
+          errorMessage: 'Could not open the camera. Check that camera access is allowed for this app.',
+        ),
+      );
     }
   }
 
@@ -127,10 +129,7 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
     }
 
     return Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 15),
-      ),
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 15)),
     );
   }
 

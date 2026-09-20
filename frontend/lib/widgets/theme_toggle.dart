@@ -15,9 +15,7 @@ class ThemeToggleButton extends StatelessWidget {
     return IconButton(
       tooltip: isDark ? 'Switch to light mode' : 'Switch to dark mode',
       icon: Icon(isDark ? AppIcons.lightMode : AppIcons.darkMode),
-      onPressed: () => context.read<HomeThemeBloc>().add(
-            const ToggleHomeThemeEvent(),
-          ),
+      onPressed: () => context.read<HomeThemeBloc>().add(const ToggleHomeThemeEvent()),
     );
   }
 }
@@ -37,19 +35,18 @@ class ThemeSwitchTile extends StatelessWidget {
       leading: Container(
         width: 44,
         height: 44,
-        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: scheme.outlineVariant)),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: scheme.outlineVariant),
+        ),
         child: Icon(isDark ? AppIcons.darkMode : AppIcons.lightMode, size: 20, color: scheme.onSurface),
       ),
       title: Text('Dark mode', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
       trailing: Switch(
         value: isDark,
-        onChanged: (_) => context.read<HomeThemeBloc>().add(
-              const ToggleHomeThemeEvent(),
-            ),
+        onChanged: (_) => context.read<HomeThemeBloc>().add(const ToggleHomeThemeEvent()),
       ),
-      onTap: () => context.read<HomeThemeBloc>().add(
-            const ToggleHomeThemeEvent(),
-          ),
+      onTap: () => context.read<HomeThemeBloc>().add(const ToggleHomeThemeEvent()),
     );
   }
 }

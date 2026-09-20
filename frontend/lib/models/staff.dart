@@ -18,11 +18,11 @@ class Staff {
   bool get isEnrolled => enrollmentPhotoUrl != null;
 
   static Staff fromJson(Map<String, dynamic> json) => Staff(
-        id: json['id'] as String,
-        employeeId: json['employee_id'] as String,
-        name: json['name'] as String,
-        enrollmentPhotoUrl: json['enrollment_photo_url'] as String?,
-        enrolledAt: json['enrolled_at'] != null ? DateTime.parse(json['enrolled_at'] as String) : null,
-        faceEmbedding: (json['face_embedding'] as List<dynamic>?)?.map((e) => (e as num).toDouble()).toList(),
-      );
+    id: json['id'] as String,
+    employeeId: json['employee_id'] as String,
+    name: json['name'] as String,
+    enrollmentPhotoUrl: json['enrollment_photo_url'] as String?,
+    enrolledAt: json['enrolled_at'] != null ? DateTime.parse(json['enrolled_at'] as String) : null,
+    faceEmbedding: (json['face_embedding'] as List<dynamic>?)?.map((e) => (e as num).toDouble()).toList(),
+  );
 }

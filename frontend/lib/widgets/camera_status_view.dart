@@ -48,10 +48,9 @@ class CameraStatusView extends StatelessWidget {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
               Text(

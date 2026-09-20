@@ -5,12 +5,7 @@ import '../../models/attendance_record.dart';
 enum StaffHomeStatus { loading, loaded, error }
 
 class StaffHomeState extends Equatable {
-  const StaffHomeState({
-    required this.status,
-    this.staff,
-    this.attendance = const [],
-    this.errorMessage,
-  });
+  const StaffHomeState({required this.status, this.staff, this.attendance = const [], this.errorMessage});
 
   const StaffHomeState.loading() : this(status: StaffHomeStatus.loading);
 

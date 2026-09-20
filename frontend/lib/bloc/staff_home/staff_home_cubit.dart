@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../utils/http/api_exception.dart';
 import '../../services/staff_service.dart';
@@ -31,6 +32,7 @@ class StaffHomeCubit extends Cubit<StaffHomeState> {
       final history = await historyFuture;
       emit(StaffHomeState(status: StaffHomeStatus.loaded, staff: staff, attendance: history));
     } on ApiException catch (e) {
+      debugPrint('[staff-home] load failed: ${e.message}');
       if (state.staff != null) return; // a failed refresh shouldn't wipe a good screen
       emit(StaffHomeState(status: StaffHomeStatus.error, errorMessage: e.message));
     }

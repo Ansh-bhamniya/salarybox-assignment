@@ -7,10 +7,7 @@
 class Env {
   Env._();
 
-  static const apiBaseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:4000',
-  );
+  static const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://10.0.2.2:4000');
 
   /// Cosine-similarity threshold above which two face embeddings (from the
   /// bundled MobileFaceNet model) are considered the same person.

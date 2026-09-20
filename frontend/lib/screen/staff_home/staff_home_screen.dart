@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../utils/routes.dart';
 import '../../config/di/service_locator.dart';
 import '../../config/theme/app_theme.dart';
+import '../../widgets/app_logo.dart';
 import '../../widgets/content_width.dart';
 import '../../widgets/error_view.dart';
 import '../../bloc/auth/auth_cubit.dart';
@@ -36,8 +38,13 @@ class _StaffHomeView extends StatelessWidget {
 
   Future<void> _markAttendance(BuildContext context) async {
     final cubit = context.read<StaffHomeCubit>();
-    final marked = await context.push<bool>('/attendance');
-    cubit.load(); // pick up the new check-in either way
+    final before = cubit.state.attendance.length;
+    final marked = await context.push<bool>(Routes.attendance);
+    await cubit.load(); // pick up the new check-in either way
+    // Straight after the camera a request can fail (e.g. a connection that
+    // went stale while the camera was open). Refreshing is silent when it
+    // fails, so if the new check-in isn't in the list yet, try once more.
+    if (marked == true && cubit.state.attendance.length <= before) await cubit.load();
     if (marked == true && context.mounted) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -122,38 +129,36 @@ class StaffHomeContent extends StatelessWidget {
               child: ListView(
                 padding: AppSpacing.page,
                 children: [
-                  // Greeting, name and ID on the left; profile button top right.
+                  // Logo on the left, profile button on the right.
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 4, top: 4),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _greeting(),
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                firstName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTheme.display(context, size: 40),
-                              ),
-                              const SizedBox(height: 12),
-                              IdPill(employeeId: staff.employeeId),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
+                      const Padding(padding: EdgeInsets.only(left: 4), child: AppLogo(height: 32)),
                       ProfileButton(staff: staff, onLogout: onLogout),
                     ],
+                  ),
+                  const SizedBox(height: AppSpacing.l),
+                  // Greeting, name and ID.
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _greeting(),
+                          style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          firstName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTheme.display(context, size: 40),
+                        ),
+                        const SizedBox(height: 12),
+                        IdPill(employeeId: staff.employeeId),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 28),
 
@@ -162,10 +167,7 @@ class StaffHomeContent extends StatelessWidget {
                   if (recent.isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.section),
                     const SectionTitle('Recent activity'),
-                    for (final record in recent) ...[
-                      ActivityTile(record: record),
-                      const SizedBox(height: 8),
-                    ],
+                    for (final record in recent) ...[ActivityTile(record: record), const SizedBox(height: 8)],
                   ],
                 ],
               ),
@@ -173,7 +175,7 @@ class StaffHomeContent extends StatelessWidget {
           ),
 
           // The one thing to tap, pinned at the bottom in thumb reach — always
-          // the solid accent purple (grey only while it can't be used yet).
+          // the solid accent green (grey only while it can't be used yet).
           SafeArea(
             top: false,
             child: Padding(

@@ -16,11 +16,7 @@ class StaffProfileCubit extends Cubit<StaffProfileState> {
     try {
       final staff = await _service.getById(staffId);
       final attendance = await _service.attendanceHistory(staffId);
-      emit(StaffProfileState(
-        status: StaffProfileStatus.loaded,
-        staff: staff,
-        attendance: attendance,
-      ));
+      emit(StaffProfileState(status: StaffProfileStatus.loaded, staff: staff, attendance: attendance));
     } on ApiException catch (e) {
       emit(StaffProfileState(status: StaffProfileStatus.error, errorMessage: e.message));
     }

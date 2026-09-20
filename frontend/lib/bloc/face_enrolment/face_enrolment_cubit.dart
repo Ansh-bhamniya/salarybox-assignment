@@ -12,11 +12,7 @@ class FaceEnrolmentCubit extends Cubit<FaceEnrolmentSubmitState> {
 
   final StaffService _service;
 
-  Future<void> submit({
-    required String staffId,
-    required String photoPath,
-    required List<double> embedding,
-  }) async {
+  Future<void> submit({required String staffId, required String photoPath, required List<double> embedding}) async {
     emit(const FaceEnrolmentSubmitState(status: FaceEnrolmentSubmitStatus.submitting));
     try {
       await _service.enroll(id: staffId, photoPath: photoPath, embedding: embedding);

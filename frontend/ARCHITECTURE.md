@@ -25,16 +25,18 @@ frontend/
 │   ├── config/                    # app configuration
 │   │   ├── env.dart               # API base URL, face-match threshold, build flags
 │   │   ├── di/service_locator.dart    # get_it registrations
-│   │   ├── router/app_router.dart     # go_router routes + auth/role redirect guard
+│   │   ├── router/app_router.dart     # go_router routes (built from utils/routes.dart) + auth/role redirect guard
 │   │   └── theme/
 │   │       ├── app_theme.dart     # AppTheme.light() / dark() — the ONLY place colours are defined
 │   │       ├── app_spacing.dart   # spacing scale + the 16pt page gutter
-│   │       └── app_radius.dart    # corner radii, defined once (cards/buttons 12, tiles 8, sheet 16, chips pill)
+│   │       ├── app_radius.dart    # corner radii, defined once (cards/buttons 12, tiles 8, sheet 16, chips pill)
+│   │       └── app_icons.dart     # every icon by role — Iconsax (main) + Fluent System Icons; never Icons.x
 │   │
 │   ├── models/                    # plain data classes (no Flutter/Bloc imports where possible)
 │   │   ├── session.dart   staff.dart   attendance_record.dart   face_match_result.dart
 │   │
 │   ├── screen/                    # one folder per screen
+│   │   ├── onboarding/            # first-run intro: 3 swipeable pages, shown once
 │   │   ├── login/                 # login_screen.dart
 │   │   ├── staff_home/            # staff_home_screen.dart (+ staff_home_widgets.dart)
 │   │   ├── mark_attendance/       # camera check-in
@@ -51,15 +53,17 @@ frontend/
 │   │
 │   ├── utils/                     # infrastructure and helpers the services build on
 │   │   ├── http/                  # api_client (dio + interceptors), api_exception
-│   │   ├── helpers/               # secure_storage, theme_mode_helper (SharedPreferences)
+│   │   ├── helpers/               # secure_storage, theme_mode_helper, onboarding_helper (SharedPreferences)
 │   │   ├── go_router_refresh_stream.dart    # re-runs router redirects when auth changes
+│   │   ├── routes.dart                      # every screen route path, spelled once (Routes.login, Routes.enrolOf(id)…)
 │   │   └── result.dart
 │   │
 │   └── widgets/                   # reusable UI, used by more than one screen
 │       ├── primary_button  loading_overlay  error_view  status_chip  content_width
-│       ├── staff_avatar  theme_toggle
+│       ├── staff_avatar  theme_toggle  app_back_button  app_fab  step_progress
 │       └── face_camera_view  camera_status_view          # the shared selfie-camera UI
 │
+├── assets/images/onboarding_{1,2,3}.png # intro illustrations, shown as supplied (the intro is always light)
 ├── assets/models/mobilefacenet.tflite   # bundled face-embedding model (see README beside it)
 ├── test/                          # face matching, theme bloc, widgets
 └── pubspec.yaml
@@ -120,6 +124,11 @@ reads `AuthCubit.state`: no session → `/login`; role `staff` → kept off the
 admin routes and sent to `/home`; role `admin` → kept off `/home` and
 `/attendance`. `refreshListenable` follows `AuthCubit`'s stream, so a
 login/logout re-runs the redirect immediately.
+
+First-run intro: while signed out and the intro hasn't been seen, the router
+sends everything to `/onboarding` (`OnboardingHelper.seen`, loaded in `main()`);
+finishing or skipping it marks it seen and continues to `/login`. Signed-in
+users are kept off `/onboarding`.
 
 ## Networking
 

@@ -33,11 +33,7 @@ class StaffService {
     });
   }
 
-  Future<Staff> enroll({
-    required String id,
-    required String photoPath,
-    required List<double> embedding,
-  }) {
+  Future<Staff> enroll({required String id, required String photoPath, required List<double> embedding}) {
     return runApiCall(() async {
       final formData = FormData.fromMap({
         'embedding': jsonEncode(embedding),
@@ -51,9 +47,7 @@ class StaffService {
   Future<List<AttendanceRecord>> attendanceHistory(String id) {
     return runApiCall(() async {
       final response = await _client.dio.get('/staff/$id/attendance');
-      return (response.data as List<dynamic>)
-          .map((e) => AttendanceRecord.fromJson(e as Map<String, dynamic>))
-          .toList();
+      return (response.data as List<dynamic>).map((e) => AttendanceRecord.fromJson(e as Map<String, dynamic>)).toList();
     });
   }
 }

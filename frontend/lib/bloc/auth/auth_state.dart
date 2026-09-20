@@ -8,9 +8,8 @@ class AuthState extends Equatable {
 
   const AuthState.unknown() : this(status: AuthStatus.unknown);
   const AuthState.unauthenticated({String? errorMessage})
-      : this(status: AuthStatus.unauthenticated, errorMessage: errorMessage);
-  const AuthState.authenticated(Session session)
-      : this(status: AuthStatus.authenticated, session: session);
+    : this(status: AuthStatus.unauthenticated, errorMessage: errorMessage);
+  const AuthState.authenticated(Session session) : this(status: AuthStatus.authenticated, session: session);
 
   final AuthStatus status;
   final Session? session;

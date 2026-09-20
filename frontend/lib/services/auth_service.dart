@@ -24,10 +24,7 @@ class AuthService {
 
   Future<Session> login({required String username, required String password}) async {
     final json = await runApiCall(() async {
-      final response = await _client.dio.post(
-        '/auth/login',
-        data: {'username': username, 'password': password},
-      );
+      final response = await _client.dio.post('/auth/login', data: {'username': username, 'password': password});
       return response.data as Map<String, dynamic>;
     });
 

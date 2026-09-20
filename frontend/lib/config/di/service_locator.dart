@@ -37,9 +37,7 @@ void setupServiceLocator() {
   sl.registerFactory<StaffListCubit>(() => StaffListCubit(sl()));
   sl.registerFactory<AddStaffCubit>(() => AddStaffCubit(sl()));
   sl.registerFactory<FaceEnrolmentCubit>(() => FaceEnrolmentCubit(sl()));
-  sl.registerFactoryParam<StaffProfileCubit, String, void>(
-    (staffId, _) => StaffProfileCubit(sl(), staffId),
-  );
+  sl.registerFactoryParam<StaffProfileCubit, String, void>((staffId, _) => StaffProfileCubit(sl(), staffId));
 
   // face — FaceEmbeddingService is a singleton (one ML Kit detector for the
   // app's lifetime); CameraCaptureController is a factory since a fresh
@@ -49,9 +47,7 @@ void setupServiceLocator() {
   sl.registerFactory<FaceCaptureCubit>(() => FaceCaptureCubit(sl(), sl()));
 
   // attendance
-  sl.registerFactoryParam<StaffHomeCubit, String, void>(
-    (staffId, _) => StaffHomeCubit(sl(), staffId),
-  );
+  sl.registerFactoryParam<StaffHomeCubit, String, void>((staffId, _) => StaffHomeCubit(sl(), staffId));
   sl.registerLazySingleton<AttendanceService>(() => AttendanceService(sl()));
   sl.registerFactoryParam<MarkAttendanceCubit, String, void>(
     (staffId, _) => MarkAttendanceCubit(

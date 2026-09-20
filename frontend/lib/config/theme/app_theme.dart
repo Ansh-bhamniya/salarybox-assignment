@@ -3,12 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import './app_spacing.dart';
 import 'app_radius.dart';
+import 'app_icons.dart';
 
 /// The app's two themes. Every colour a screen needs lives in these
 /// [ColorScheme]s and is read with `Theme.of(context).colorScheme` — screens
 /// never pick light/dark colours themselves.
 ///
-/// Light: neutrals plus ONE accent (purple) used in shades. Dark: pure
+/// Light: neutrals plus ONE accent (the lime green from the logo, #8DC655) used in shades. Dark: pure
 /// neutrals — black, greys, white — like Uber. In both, hierarchy comes from
 /// size, weight and shade, not from extra hues.
 ///
@@ -20,7 +21,7 @@ import 'app_radius.dart';
 ///  * `primary` / `primaryContainer` — the accent, and tinted surfaces of it
 ///  * `error` — genuine failure states only
 ///  * `primaryFixedDim` — the accent on the camera, whose chrome is always
-///    dark whatever the theme (light purple in the light theme, white in dark)
+///    dark whatever the theme (light green in the light theme, white in dark)
 class AppTheme {
   AppTheme._();
 
@@ -30,42 +31,42 @@ class AppTheme {
 
   /// Big, bold, tightly tracked sans for headline moments (names, times).
   static TextStyle display(BuildContext context, {double size = 40, Color? color}) => GoogleFonts.plusJakartaSans(
-        fontSize: size,
-        fontWeight: FontWeight.w800,
-        height: 1.05,
-        letterSpacing: -size * 0.025,
-        color: color ?? Theme.of(context).colorScheme.onSurface,
-      );
+    fontSize: size,
+    fontWeight: FontWeight.w800,
+    height: 1.05,
+    letterSpacing: -size * 0.025,
+    color: color ?? Theme.of(context).colorScheme.onSurface,
+  );
 
   static const _lightScheme = ColorScheme(
     brightness: Brightness.light,
-    primary: Color(0xFF6C4CF1),
+    primary: Color(0xFF8DC655),
     onPrimary: Colors.white,
-    primaryContainer: Color(0xFFEDE8FF),
-    onPrimaryContainer: Color(0xFF1C1B3A),
-    primaryFixed: Color(0xFFDDD3FF),
-    primaryFixedDim: Color(0xFFB8A9FF),
-    onPrimaryFixed: Color(0xFF1C1B3A),
-    onPrimaryFixedVariant: Color(0xFF3B2A99),
-    secondary: Color(0xFF6C4CF1),
+    primaryContainer: Color(0xFFEDF6E0),
+    onPrimaryContainer: Color(0xFF243D0E),
+    primaryFixed: Color(0xFFD9EBBF),
+    primaryFixedDim: Color(0xFFA9D97B),
+    onPrimaryFixed: Color(0xFF243D0E),
+    onPrimaryFixedVariant: Color(0xFF4F7A1F),
+    secondary: Color(0xFF8DC655),
     onSecondary: Colors.white,
-    secondaryContainer: Color(0xFFEDE8FF),
-    onSecondaryContainer: Color(0xFF1C1B3A),
+    secondaryContainer: Color(0xFFEDF6E0),
+    onSecondaryContainer: Color(0xFF243D0E),
     error: Color(0xFFDC2626),
     onError: Colors.white,
-    surface: Color(0xFFF6F4FF),
-    onSurface: Color(0xFF1C1B3A),
-    onSurfaceVariant: Color(0xFF6B6A85),
+    surface: Color(0xFFF5F5F5),
+    onSurface: Color(0xFF111111),
+    onSurfaceVariant: Color(0xFF6B6B6B),
     surfaceContainerLowest: Colors.white,
     surfaceContainerLow: Colors.white,
-    surfaceContainer: Color(0xFFF0EEFA),
-    surfaceContainerHigh: Color(0xFFEAE7F7),
-    surfaceContainerHighest: Color(0xFFE4E1F3),
-    outline: Color(0xFFB9B6D3),
-    outlineVariant: Color(0xFFE6E3F5),
-    inverseSurface: Color(0xFF1C1B3A),
+    surfaceContainer: Color(0xFFEFEFEF),
+    surfaceContainerHigh: Color(0xFFE8E8E8),
+    surfaceContainerHighest: Color(0xFFE1E1E1),
+    outline: Color(0xFFB5B5B5),
+    outlineVariant: Color(0xFFE5E5E5),
+    inverseSurface: Color(0xFF111111),
     onInverseSurface: Colors.white,
-    inversePrimary: Color(0xFFB8A9FF),
+    inversePrimary: Color(0xFFA9D97B),
   );
 
   /// Dark mode is pure neutral — black, greys and white, like Uber's. There is
@@ -106,10 +107,9 @@ class AppTheme {
     final isDark = scheme.brightness == Brightness.dark;
 
     final baseText = ThemeData(brightness: scheme.brightness).textTheme;
-    final textTheme = GoogleFonts.plusJakartaSansTextTheme(baseText).apply(
-      bodyColor: scheme.onSurface,
-      displayColor: scheme.onSurface,
-    );
+    final textTheme = GoogleFonts.plusJakartaSansTextTheme(
+      baseText,
+    ).apply(bodyColor: scheme.onSurface, displayColor: scheme.onSurface);
 
     final controlShape = RoundedRectangleBorder(borderRadius: AppRadius.controlBorder);
     const pillShape = StadiumBorder();
@@ -120,6 +120,7 @@ class AppTheme {
       colorScheme: scheme,
       textTheme: textTheme,
       scaffoldBackgroundColor: scheme.surface,
+      actionIconTheme: ActionIconThemeData(backButtonIconBuilder: (context) => const Icon(AppIcons.back)),
       appBarTheme: AppBarTheme(
         centerTitle: false,
         titleSpacing: AppSpacing.gutter,
@@ -134,9 +135,18 @@ class AppTheme {
         filled: true,
         fillColor: scheme.surfaceContainerLowest,
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-        border: OutlineInputBorder(borderRadius: AppRadius.controlBorder, borderSide: BorderSide(color: scheme.outlineVariant)),
-        enabledBorder: OutlineInputBorder(borderRadius: AppRadius.controlBorder, borderSide: BorderSide(color: scheme.outlineVariant)),
-        focusedBorder: OutlineInputBorder(borderRadius: AppRadius.controlBorder, borderSide: BorderSide(color: scheme.primary, width: 2)),
+        border: OutlineInputBorder(
+          borderRadius: AppRadius.controlBorder,
+          borderSide: BorderSide(color: scheme.outlineVariant),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: AppRadius.controlBorder,
+          borderSide: BorderSide(color: scheme.outlineVariant),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: AppRadius.controlBorder,
+          borderSide: BorderSide(color: scheme.primary, width: 2),
+        ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(

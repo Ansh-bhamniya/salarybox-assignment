@@ -6,13 +6,7 @@ enum UserRole { admin, staff }
 /// member's own id — used both to scope which attendance record they can
 /// create and to fetch their own enrolled face embedding.
 class Session {
-  const Session({
-    required this.token,
-    required this.role,
-    this.staffId,
-    this.staffName,
-    this.employeeId,
-  });
+  const Session({required this.token, required this.role, this.staffId, this.staffName, this.employeeId});
 
   final String token;
   final UserRole role;
@@ -21,20 +15,20 @@ class Session {
   final String? employeeId;
 
   Map<String, dynamic> toJson() => {
-        'token': token,
-        'role': role.name,
-        'staffId': staffId,
-        'staffName': staffName,
-        'employeeId': employeeId,
-      };
+    'token': token,
+    'role': role.name,
+    'staffId': staffId,
+    'staffName': staffName,
+    'employeeId': employeeId,
+  };
 
   static Session fromJson(Map<String, dynamic> json) => Session(
-        token: json['token'] as String,
-        role: UserRole.values.byName(json['role'] as String),
-        staffId: json['staffId'] as String?,
-        staffName: json['staffName'] as String?,
-        employeeId: json['employeeId'] as String?,
-      );
+    token: json['token'] as String,
+    role: UserRole.values.byName(json['role'] as String),
+    staffId: json['staffId'] as String?,
+    staffName: json['staffName'] as String?,
+    employeeId: json['employeeId'] as String?,
+  );
 
   String encode() => jsonEncode(toJson());
 

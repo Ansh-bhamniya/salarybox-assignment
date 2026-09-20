@@ -22,7 +22,10 @@ class StaffAvatar extends StatelessWidget {
       foregroundColor: scheme.onPrimaryContainer,
       backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
       child: photoUrl == null
-          ? Text(initial, style: TextStyle(fontSize: radius * 0.8, fontWeight: FontWeight.w600))
+          ? Text(
+              initial,
+              style: TextStyle(fontSize: radius * 0.8, fontWeight: FontWeight.w600),
+            )
           : null,
     );
   }

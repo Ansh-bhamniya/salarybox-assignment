@@ -23,10 +23,12 @@ class FaceCaptureCubit extends Cubit<FaceCaptureState> {
       await _camera.initialize();
       emit(state.copyWith(status: FaceCaptureStatus.cameraReady));
     } catch (_) {
-      emit(state.copyWith(
-        status: FaceCaptureStatus.error,
-        errorMessage: 'Could not open the camera. Check camera permission.',
-      ));
+      emit(
+        state.copyWith(
+          status: FaceCaptureStatus.error,
+          errorMessage: 'Could not open the camera. Check camera permission.',
+        ),
+      );
     }
   }
 
@@ -35,18 +37,16 @@ class FaceCaptureCubit extends Cubit<FaceCaptureState> {
     try {
       final photo = await _camera.capture();
       final sample = await _embeddingService.generateEmbedding(photo.path);
-      emit(state.copyWith(
-        status: FaceCaptureStatus.ready,
-        photoPath: sample.imagePath,
-        embedding: sample.embedding,
-      ));
+      emit(state.copyWith(status: FaceCaptureStatus.ready, photoPath: sample.imagePath, embedding: sample.embedding));
     } on FaceProcessingException catch (e) {
       emit(state.copyWith(status: FaceCaptureStatus.cameraReady, errorMessage: e.message));
     } catch (_) {
-      emit(state.copyWith(
-        status: FaceCaptureStatus.cameraReady,
-        errorMessage: 'Something went wrong capturing the photo. Try again.',
-      ));
+      emit(
+        state.copyWith(
+          status: FaceCaptureStatus.cameraReady,
+          errorMessage: 'Something went wrong capturing the photo. Try again.',
+        ),
+      );
     }
   }
 

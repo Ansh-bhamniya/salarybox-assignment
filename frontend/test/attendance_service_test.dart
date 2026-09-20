@@ -22,13 +22,13 @@ void main() {
   tearDown(() => selfie.parent.deleteSync(recursive: true));
 
   Future<void> record() => service.record(
-        staffId: 'staff-1',
-        selfiePath: selfie.path,
-        latitude: 28.6139,
-        longitude: 77.209,
-        matchConfidence: 0.91,
-        capturedAt: DateTime(2026, 9, 20, 2, 0),
-      );
+    staffId: 'staff-1',
+    selfiePath: selfie.path,
+    latitude: 28.6139,
+    longitude: 77.209,
+    matchConfidence: 0.91,
+    capturedAt: DateTime(2026, 9, 20, 2, 0),
+  );
 
   test('posts the check-in as multipart to /attendance', () async {
     await record();
@@ -64,9 +64,11 @@ void main() {
 
     expect(
       record(),
-      throwsA(isA<ApiException>()
-          .having((e) => e.message, 'message', 'Cannot record attendance for another staff member')
-          .having((e) => e.statusCode, 'statusCode', 403)),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.message, 'message', 'Cannot record attendance for another staff member')
+            .having((e) => e.statusCode, 'statusCode', 403),
+      ),
     );
   });
 }

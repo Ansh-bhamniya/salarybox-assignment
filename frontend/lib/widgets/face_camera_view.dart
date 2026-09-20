@@ -13,12 +13,7 @@ import '../config/theme/app_icons.dart';
 /// Expects [camera] to be initialized. While [busy] (a capture is being
 /// processed) the live analysis pauses and the shutter is disabled.
 class FaceCameraView extends StatefulWidget {
-  const FaceCameraView({
-    super.key,
-    required this.camera,
-    required this.onCapture,
-    this.busy = false,
-  });
+  const FaceCameraView({super.key, required this.camera, required this.onCapture, this.busy = false});
 
   final CameraCaptureController camera;
   final VoidCallback onCapture;
@@ -28,8 +23,7 @@ class FaceCameraView extends StatefulWidget {
   State<FaceCameraView> createState() => _FaceCameraViewState();
 }
 
-class _FaceCameraViewState extends State<FaceCameraView>
-    with WidgetsBindingObserver {
+class _FaceCameraViewState extends State<FaceCameraView> with WidgetsBindingObserver {
   late final FaceGuidanceAnalyzer _analyzer;
 
   @override
@@ -39,10 +33,7 @@ class _FaceCameraViewState extends State<FaceCameraView>
     // Portrait only while the camera is up (the framing oval and face
     // detection assume it) — the rest of the app stays free to rotate.
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-    _analyzer = FaceGuidanceAnalyzer(
-      sensorOrientation:
-          widget.camera.controller!.description.sensorOrientation,
-    );
+    _analyzer = FaceGuidanceAnalyzer(sensorOrientation: widget.camera.controller!.description.sensorOrientation);
     _startStream();
   }
 
@@ -106,10 +97,7 @@ class _FaceCameraViewState extends State<FaceCameraView>
                         const SizedBox(height: kToolbarHeight + 8),
                         _GuidancePill(guidance: guidance),
                         const Spacer(),
-                        _ShutterButton(
-                          enabled: !widget.busy,
-                          onTap: widget.onCapture,
-                        ),
+                        _ShutterButton(enabled: !widget.busy, onTap: widget.onCapture),
                         const SizedBox(height: 32),
                       ],
                     ),
@@ -139,21 +127,13 @@ class _CoverPreview extends StatelessWidget {
 
     // previewSize is reported in sensor (landscape) terms; the UI is locked
     // to portrait, so the short side is the width.
-    final width = previewSize.width < previewSize.height
-        ? previewSize.width
-        : previewSize.height;
-    final height = previewSize.width < previewSize.height
-        ? previewSize.height
-        : previewSize.width;
+    final width = previewSize.width < previewSize.height ? previewSize.width : previewSize.height;
+    final height = previewSize.width < previewSize.height ? previewSize.height : previewSize.width;
 
     return ClipRect(
       child: FittedBox(
         fit: BoxFit.cover,
-        child: SizedBox(
-          width: width,
-          height: height,
-          child: CameraPreview(controller),
-        ),
+        child: SizedBox(width: width, height: height, child: CameraPreview(controller)),
       ),
     );
   }
@@ -162,11 +142,7 @@ class _CoverPreview extends StatelessWidget {
 Rect _ovalRect(Size size) {
   final width = size.width * 0.72;
   final height = width * 1.3;
-  return Rect.fromCenter(
-    center: Offset(size.width / 2, size.height * 0.44),
-    width: width,
-    height: height,
-  );
+  return Rect.fromCenter(center: Offset(size.width / 2, size.height * 0.44), width: width, height: height);
 }
 
 class _OvalMaskPainter extends CustomPainter {
@@ -182,10 +158,7 @@ class _OvalMaskPainter extends CustomPainter {
       ..fillType = PathFillType.evenOdd
       ..addRect(Offset.zero & size)
       ..addOval(oval);
-    canvas.drawPath(
-      scrim,
-      Paint()..color = Colors.black.withValues(alpha: 0.55),
-    );
+    canvas.drawPath(scrim, Paint()..color = Colors.black.withValues(alpha: 0.55));
 
     canvas.drawOval(
       oval,
@@ -197,8 +170,7 @@ class _OvalMaskPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_OvalMaskPainter oldDelegate) =>
-      oldDelegate.ringColor != ringColor;
+  bool shouldRepaint(_OvalMaskPainter oldDelegate) => oldDelegate.ringColor != ringColor;
 }
 
 class _GuidancePill extends StatelessWidget {
@@ -211,7 +183,7 @@ class _GuidancePill extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final good = guidance == FaceGuidance.good;
     // "Good" uses the accent, so its text must be the colour meant for it
-    // (white on purple in light mode, black on white in dark mode).
+    // (white on green in light mode, black on white in dark mode).
     final foreground = good ? scheme.onPrimary : Colors.white;
 
     return AnimatedContainer(
@@ -226,7 +198,10 @@ class _GuidancePill extends StatelessWidget {
         children: [
           Icon(good ? AppIcons.checkFilled : AppIcons.face, size: 18, color: foreground),
           const SizedBox(width: 8),
-          Text(guidance.message, style: TextStyle(color: foreground, fontWeight: FontWeight.w600)),
+          Text(
+            guidance.message,
+            style: TextStyle(color: foreground, fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     );
@@ -258,10 +233,7 @@ class _ShutterButton extends StatelessWidget {
               border: Border.all(color: Colors.white, width: 4),
             ),
             child: const DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white,
-              ),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white),
             ),
           ),
         ),

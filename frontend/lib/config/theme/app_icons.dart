@@ -15,6 +15,7 @@ class AppIcons {
   static const IconData logout = Iconsax.logout;
   static const IconData refresh = Iconsax.refresh;
   static const IconData camera = Iconsax.camera;
+  static const IconData clock = Iconsax.clock;
 
   // Theme
   static const IconData darkMode = Iconsax.moon;

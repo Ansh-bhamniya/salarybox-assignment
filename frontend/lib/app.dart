@@ -32,6 +32,7 @@ class _MyAppState extends State<MyApp> {
         buildWhen: (previous, current) => previous.mode != current.mode,
         builder: (context, state) {
           return MaterialApp.router(
+            debugShowCheckedModeBanner: false,
             title: 'Attendance',
             theme: AppTheme.light(),
             darkTheme: AppTheme.dark(),

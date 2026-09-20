@@ -29,9 +29,7 @@ class CameraCaptureController {
       ResolutionPreset.high,
       enableAudio: false,
       // Formats ML Kit can read straight from the live frame stream.
-      imageFormatGroup: defaultTargetPlatform == TargetPlatform.iOS
-          ? ImageFormatGroup.bgra8888
-          : ImageFormatGroup.nv21,
+      imageFormatGroup: defaultTargetPlatform == TargetPlatform.iOS ? ImageFormatGroup.bgra8888 : ImageFormatGroup.nv21,
     );
     await controller.initialize();
     try {

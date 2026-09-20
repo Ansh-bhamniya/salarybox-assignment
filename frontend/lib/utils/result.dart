@@ -7,10 +7,7 @@ sealed class Result<T> {
   factory Result.ok(T value) = Ok<T>;
   factory Result.err(String message) = Err<T>;
 
-  R when<R>({
-    required R Function(T value) ok,
-    required R Function(String message) err,
-  }) {
+  R when<R>({required R Function(T value) ok, required R Function(String message) err}) {
     final self = this;
     if (self is Ok<T>) return ok(self.value);
     if (self is Err<T>) return err(self.message);
