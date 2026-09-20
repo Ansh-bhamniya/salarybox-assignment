@@ -67,7 +67,7 @@ flutter build apk --release --dart-define=API_BASE_URL=https://your-backend.exam
 **a. Set up Supabase**
 
 1. Create a Supabase project.
-2. In the SQL editor, run [`backend/db/schema.sql`](backend/db/schema.sql). It creates the `users`, `staff` and `attendance` tables and seeds the admin user.
+2. In the SQL editor, run [`backend/db/schema.sql`](backend/db/schema.sql). It creates the tables (`users`, `staff`, `face_templates`, `attendance`, `attendance_attempts`, `audit_log`), the `enrol_face` function, turns on row level security, and seeds the admin user. It is safe to re-run, so run it again to upgrade an existing project — it also backfills existing enrolments into `face_templates`.
 3. In Storage, create two **public** buckets: `enrollment-photos` and `attendance-selfies`.
 
 **b. Configure and start the API**
@@ -115,9 +115,12 @@ Use the project's production domain (`<project>.vercel.app`) in the app, not a p
 cd frontend
 flutter analyze
 flutter test
+
+cd ../backend
+npm test
 ```
 
-The backend has no automated tests.
+The backend tests cover input validation and error responses; they don't need a database. The API's database paths (enrolment, the not-enrolled refusal) are not covered by automated tests.
 
 ## How it works
 
@@ -131,12 +134,12 @@ The backend has no automated tests.
 | Method | Path                     | Who            | Purpose                                 |
 | ------ | ------------------------ | -------------- | --------------------------------------- |
 | POST   | `/auth/login`            | anyone         | Returns a JWT (12 h) and the role       |
-| GET    | `/staff`                 | admin          | List staff                              |
+| GET    | `/staff`                 | admin          | List staff (each with an `enrolled` flag) |
 | POST   | `/staff`                 | admin          | Create staff                            |
 | GET    | `/staff/:id`             | admin, or self | Profile including the face embedding    |
-| POST   | `/staff/:id/enroll`      | admin          | Upload enrolment photo + embedding      |
+| POST   | `/staff/:id/enroll`      | admin          | Upload enrolment photo + embedding (+ `modelVersion`) |
 | GET    | `/staff/:id/attendance`  | admin, or self | Attendance history                      |
-| POST   | `/attendance`            | staff (self)   | Record attendance (multipart selfie)    |
+| POST   | `/attendance`            | staff (self)   | Record attendance (multipart selfie). 409 `not_enrolled` if the person has no active face |
 
 ## Assumptions and limitations
 
@@ -150,8 +153,8 @@ The backend has no automated tests.
 
 - There is **no liveness or anti-spoofing** check. A printed photo or a photo on another screen could pass.
 - The match threshold (`0.55` cosine similarity, in `frontend/lib/config/env.dart`) was calibrated offline on public LFW photos, not on real enrolment/selfie pairs from this app. Expect to tune it. Build with `--dart-define=SHOW_MATCH_SCORE=true` to show the raw score on the result screen while calibrating.
-- One enrolled face per staff member. Re-enrolling overwrites the previous face.
-- Staff can't mark attendance until an admin has enrolled their face.
+- One active face per staff member. Re-enrolling replaces it; the previous template is kept, marked revoked, with an audit entry.
+- Staff can't mark attendance until an admin has enrolled their face. The app disables the button, and the server also refuses the record (409 `not_enrolled`) and logs the attempt.
 
 **Location and time**
 

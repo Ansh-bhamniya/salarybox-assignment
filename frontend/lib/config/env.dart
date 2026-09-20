@@ -10,6 +10,12 @@ class Env {
 
   static const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'https://salarybox-backend.vercel.app');
 
+  /// Identifies the bundled face model (`assets/models/mobilefacenet.tflite`) to
+  /// the backend, which stores it with every enrolment so faces made by
+  /// different models are never compared. Change it whenever the model file
+  /// changes.
+  static const faceModelVersion = 'mobilefacenet-192-v1';
+
   /// Cosine-similarity threshold above which two face embeddings (from the
   /// bundled MobileFaceNet model) are considered the same person.
   ///

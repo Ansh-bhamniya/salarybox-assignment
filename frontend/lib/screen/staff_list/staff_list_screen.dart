@@ -78,15 +78,25 @@ Future<void> _openAddStaff(BuildContext context) async {
   cubit.load(); // enrolling changes its status
 }
 
-class _StaffList extends StatelessWidget {
+class _StaffList extends StatefulWidget {
   const _StaffList({required this.staff});
 
   final List<Staff> staff;
 
   @override
+  State<_StaffList> createState() => _StaffListState();
+}
+
+class _StaffListState extends State<_StaffList> {
+  bool _onlyNotEnrolled = false;
+
+  @override
   Widget build(BuildContext context) {
-    final enrolled = staff.where((s) => s.isEnrolled).length;
-    final pending = staff.length - enrolled;
+    final staff = widget.staff;
+    final pending = staff.where((s) => !s.isEnrolled).length;
+    // Enrolling the last pending person leaves nothing to filter to.
+    final filtering = _onlyNotEnrolled && pending > 0;
+    final shown = filtering ? staff.where((s) => !s.isEnrolled).toList() : staff;
     final theme = Theme.of(context);
 
     return ContentWidth(
@@ -95,21 +105,33 @@ class _StaffList extends StatelessWidget {
         child: ListView.separated(
           // Extra bottom padding so the last row clears the floating button.
           padding: AppSpacing.pageWithFab,
-          itemCount: staff.length + 1,
+          itemCount: shown.length + 1,
           separatorBuilder: (_, _) => const SizedBox(height: 8),
           itemBuilder: (context, index) {
             if (index == 0) {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8, left: 4),
-                child: Text(
-                  pending == 0
-                      ? '${staff.length} staff • all enrolled'
-                      : '${staff.length} staff • $pending need${pending == 1 ? 's' : ''} face enrolment',
-                  style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        pending == 0
+                            ? '${staff.length} staff • all enrolled'
+                            : '${staff.length} staff • $pending need${pending == 1 ? 's' : ''} face enrolment',
+                        style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ),
+                    if (pending > 0)
+                      FilterChip(
+                        label: const Text('Not enrolled'),
+                        selected: filtering,
+                        onSelected: (value) => setState(() => _onlyNotEnrolled = value),
+                      ),
+                  ],
                 ),
               );
             }
-            return _StaffCard(staff: staff[index - 1]);
+            return _StaffCard(staff: shown[index - 1]);
           },
         ),
       ),

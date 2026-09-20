@@ -3,7 +3,7 @@
 Express API sitting between the Flutter app and Supabase. Thin layer: routes
 parse the request, controllers orchestrate, services do the actual Supabase
 work. No ORM — using `@supabase/supabase-js` directly since the schema is
-small (3 tables) and doesn't need one.
+small and doesn't need one.
 
 ```
 backend/
@@ -30,19 +30,22 @@ backend/
 │   │
 │   ├── services/
 │   │   ├── auth.service.js       # dummy credential check, token issuing
-│   │   ├── staff.service.js      # staff CRUD + embedding read/write against Postgres
-│   │   ├── attendance.service.js # insert/list attendance rows
+│   │   ├── staff.service.js      # staff CRUD; enrolment via the enrol_face() SQL function
+│   │   ├── face-template.service.js # a staff member's active face templates
+│   │   ├── attendance.service.js # insert/list attendance rows; refuses staff with no active face
 │   │   └── storage.service.js    # uploads selfie/enrollment images to Supabase Storage
 │   │
 │   ├── utils/
-│   │   ├── ApiError.js       # thin error class carrying an http status
+│   │   ├── ApiError.js       # thin error class carrying an http status (+ optional machine-readable code)
+│   │   ├── embedding.js      # accepted face-model versions; validates uploaded embeddings
 │   │   └── asyncHandler.js   # wraps async route handlers so thrown errors reach errorHandler
 │   │
 │   ├── app.js                 # express app: middleware, route mounting, error handler
 │   └── server.js              # entry point — starts http server on PORT
 │
 ├── db/
-│   └── schema.sql             # Postgres schema for the 3 tables (run once against Supabase)
+│   └── schema.sql             # Postgres schema, idempotent — run against Supabase to set up or upgrade
+├── test/                      # node --test (npm test)
 │
 ├── .env.example
 ├── .gitignore
@@ -75,6 +78,21 @@ table, and on success signs a short-lived JWT containing `{ userId, role,
 staffId }`. `middleware/auth.js` verifies that token on every route except
 `/auth/login` and attaches the payload to `req.user`. Staff-only routes
 check `req.user.role`.
+
+## Face templates
+
+Enrolment never overwrites. Each enrolled face is a row in `face_templates`
+(embedding + `model_version` + who enrolled it). `enrol_face()` — a Postgres
+function, so it is atomic — revokes the person's active templates, inserts the
+new one, refreshes the legacy `staff.face_embedding` / `enrollment_photo_url` /
+`enrolled_at` columns (kept only for app builds that predate the table) and
+writes an `audit_log` entry. "Enrolled" everywhere means "has an active
+template". `POST /attendance` returns 409 `not_enrolled` (and records the
+refusal in `attendance_attempts`) for anyone without one.
+
+Uploaded embeddings are validated (known model version, right length, unit
+length) before they are stored. Row level security is on for every table with
+no policies: only the API's service-role key can read or write them.
 
 ## Env vars (`.env`)
 

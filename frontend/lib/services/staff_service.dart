@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../models/attendance_record.dart';
 import '../models/staff.dart';
 import '../utils/http/api_client.dart';
+import '../config/env.dart';
 
 /// Everything about staff members: the list, creating one, a single profile,
 /// enrolling a face, and a member's attendance history. Talks to the backend
@@ -37,6 +38,7 @@ class StaffService {
     return runApiCall(() async {
       final formData = FormData.fromMap({
         'embedding': jsonEncode(embedding),
+        'modelVersion': Env.faceModelVersion,
         'photo': await MultipartFile.fromFile(photoPath, filename: 'enrollment.jpg'),
       });
       final response = await _client.dio.post('/staff/$id/enroll', data: formData);

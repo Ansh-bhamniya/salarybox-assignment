@@ -64,6 +64,7 @@ void main() {
     expect(adapter.request.path, '/staff/1/enroll');
     final form = adapter.request.data as FormData;
     expect(form.fields.firstWhere((f) => f.key == 'embedding').value, '[0.5,0.25]');
+    expect(form.fields.firstWhere((f) => f.key == 'modelVersion').value, 'mobilefacenet-192-v1');
     expect(form.files.single.key, 'photo');
     expect(form.files.single.value.filename, 'enrollment.jpg');
     expect(staff.isEnrolled, isTrue);
