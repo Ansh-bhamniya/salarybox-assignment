@@ -1,13 +1,14 @@
 /// App-wide config that would normally vary per build flavor.
 ///
-/// [apiBaseUrl] defaults to the Android emulator's alias for the host
-/// machine's localhost (10.0.2.2). Override at build time with
-/// `--dart-define=API_BASE_URL=https://your-host:4000` when running against
-/// a physical device or a deployed backend.
+/// [apiBaseUrl] defaults to the deployed Vercel backend, so a plain
+/// `flutter build apk --release` produces an APK that works on a real device.
+/// Override at build time with `--dart-define=API_BASE_URL=...` — e.g.
+/// `http://10.0.2.2:4000` to hit a backend running on the host machine from
+/// the Android emulator.
 class Env {
   Env._();
 
-  static const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://10.0.2.2:4000');
+  static const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'https://salarybox-backend.vercel.app');
 
   /// Cosine-similarity threshold above which two face embeddings (from the
   /// bundled MobileFaceNet model) are considered the same person.
