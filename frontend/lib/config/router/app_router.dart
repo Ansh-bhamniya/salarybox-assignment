@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import '../../screen/mark_attendance/mark_attendance_screen.dart';
 import '../../screen/staff_home/staff_home_screen.dart';
@@ -12,20 +13,29 @@ import '../../screen/staff_profile/staff_profile_screen.dart';
 import '../di/service_locator.dart';
 import '../../utils/go_router_refresh_stream.dart';
 import '../../screen/onboarding/onboarding_screen.dart';
+import '../../screen/splash/splash_screen.dart';
 import '../../utils/helpers/onboarding_helper.dart';
 import '../../utils/routes.dart';
 
 GoRouter buildRouter() {
+  // Flips once the splash has been on screen for its full duration.
+  final splashDone = ValueNotifier<bool>(false);
+
   return GoRouter(
-    initialLocation: Routes.login,
-    refreshListenable: GoRouterRefreshStream(sl<AuthCubit>().stream),
+    initialLocation: Routes.splash,
+    refreshListenable: Listenable.merge([GoRouterRefreshStream(sl<AuthCubit>().stream), splashDone]),
     redirect: (context, state) {
       final authState = sl<AuthCubit>().state;
+      final onSplash = state.matchedLocation == Routes.splash;
       final loggingIn = state.matchedLocation == Routes.login;
       final onboarding = state.matchedLocation == Routes.onboarding;
 
+      // Stay on the splash until its time is up.
+      if (onSplash && !splashDone.value) return null;
+
       // Session restore from disk hasn't finished yet — don't bounce to
-      // login and cause a flash before we know the real answer.
+      // login and cause a flash before we know the real answer. (This also
+      // keeps the splash up if the restore outlasts it.)
       if (authState.status == AuthStatus.unknown) return null;
 
       if (authState.status != AuthStatus.authenticated) {
@@ -36,7 +46,7 @@ GoRouter buildRouter() {
       }
 
       final role = authState.session!.role;
-      if (loggingIn || onboarding) {
+      if (onSplash || loggingIn || onboarding) {
         return role == UserRole.admin ? Routes.staff : Routes.home;
       }
 
@@ -49,6 +59,7 @@ GoRouter buildRouter() {
       return null;
     },
     routes: [
+      GoRoute(path: Routes.splash, builder: (context, state) => SplashScreen(onFinished: () => splashDone.value = true)),
       GoRoute(path: Routes.onboarding, builder: (context, state) => const OnboardingScreen()),
       GoRoute(path: Routes.login, builder: (context, state) => const LoginScreen()),
       // Admin. Listed most specific first: '/staff/add' must win over '/staff/:id'.

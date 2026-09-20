@@ -36,6 +36,7 @@ frontend/
 │   │   ├── session.dart   staff.dart   attendance_record.dart   face_match_result.dart
 │   │
 │   ├── screen/                    # one folder per screen
+│   │   ├── splash/                # splash_screen.dart: logo for 3 s on every launch, then routes on
 │   │   ├── onboarding/            # first-run intro: 3 swipeable pages, shown once
 │   │   ├── login/                 # login_screen.dart
 │   │   ├── staff_home/            # staff_home_screen.dart (+ staff_home_widgets.dart)
@@ -124,6 +125,13 @@ reads `AuthCubit.state`: no session → `/login`; role `staff` → kept off the
 admin routes and sent to `/home`; role `admin` → kept off `/home` and
 `/attendance`. `refreshListenable` follows `AuthCubit`'s stream, so a
 login/logout re-runs the redirect immediately.
+
+Splash: `initialLocation` is `/splash`. `SplashScreen` shows the logo for
+`SplashScreen.duration` (3 s), then flips a notifier that the router also
+listens to. The redirect keeps the user on `/splash` until that has happened
+*and* the session restore has finished (so a slow restore holds the splash a
+little longer instead of flashing the login screen); after that the normal
+rules below pick the destination — intro, login, or the role's home.
 
 First-run intro: while signed out and the intro hasn't been seen, the router
 sends everything to `/onboarding` (`OnboardingHelper.seen`, loaded in `main()`);

@@ -5,6 +5,7 @@
 /// Backend endpoints are a different thing and live in the services.
 abstract final class Routes {
   // Before login
+  static const splash = '/splash';
   static const onboarding = '/onboarding';
   static const login = '/login';
 
