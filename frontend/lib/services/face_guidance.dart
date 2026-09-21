@@ -1,7 +1,7 @@
-import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import './camera_input_image.dart';
 
 /// What the live preview should tell the user right now.
 enum FaceGuidance {
@@ -46,7 +46,7 @@ class FaceGuidanceAnalyzer {
     _lastRun = now;
 
     try {
-      final input = _toInputImage(image);
+      final input = inputImageFromCameraImage(image, sensorOrientation);
       if (input == null) return;
       final faces = await _detector.processImage(input);
       if (_closed) return;
@@ -58,34 +58,13 @@ class FaceGuidanceAnalyzer {
     }
   }
 
-  InputImage? _toInputImage(CameraImage image) {
-    final rotation = InputImageRotationValue.fromRawValue(sensorOrientation);
-    final format = InputImageFormatValue.fromRawValue(image.format.raw);
-    if (rotation == null || format == null) return null;
-    if (format != InputImageFormat.nv21 && format != InputImageFormat.bgra8888) return null;
-    if (image.planes.length != 1) return null;
-
-    final plane = image.planes.first;
-    return InputImage.fromBytes(
-      bytes: plane.bytes,
-      metadata: InputImageMetadata(
-        size: Size(image.width.toDouble(), image.height.toDouble()),
-        rotation: rotation,
-        format: format,
-        bytesPerRow: plane.bytesPerRow,
-      ),
-    );
-  }
-
   FaceGuidance _evaluate(List<Face> faces, CameraImage image) {
     if (faces.isEmpty) return FaceGuidance.searching;
     if (faces.length > 1) return FaceGuidance.multipleFaces;
 
-    // ML Kit reports boxes in the upright (rotated) frame, so for a
-    // sideways sensor the frame's width/height swap.
-    final sideways = sensorOrientation == 90 || sensorOrientation == 270;
-    final frameWidth = (sideways ? image.height : image.width).toDouble();
-    final frameHeight = (sideways ? image.width : image.height).toDouble();
+    final frame = uprightFrameSize(image, sensorOrientation);
+    final frameWidth = frame.width;
+    final frameHeight = frame.height;
 
     final face = faces.single;
     final box = face.boundingBox;
