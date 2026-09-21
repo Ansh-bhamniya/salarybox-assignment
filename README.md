@@ -12,6 +12,12 @@ Face detection (Google ML Kit) and face matching (bundled MobileFaceNet TFLite m
 Flutter app ──REST/JSON──▶ Express API (Vercel) ──supabase-js──▶ Supabase (Postgres + Storage)
 ```
 
+## Demo
+
+<a href="docs/demo.mp4"><img src="docs/demo-thumbnail.png" alt="Watch the 1-minute demo" width="240"></a>
+
+**[▶ Watch the 1-minute demo](docs/demo.mp4)** — screen recording on an iPhone: login, adding a staff member, and marking attendance with the head-turn face check, ending on the check-in confirmation.
+
 ## Demo credentials
 
 | Role  | Username                   | Password   |
@@ -29,15 +35,141 @@ Flutter app ──REST/JSON──▶ Express API (Vercel) ──supabase-js─�
 
 The app's default API URL (`frontend/lib/config/env.dart`) already points here, so you can run or build the app without running the backend yourself.
 
-## How to run
+## Run it locally
 
-### Prerequisites
+This is the path for someone who was sent the project's **`.env` file**. You run the backend on your own machine and the Flutter app on an Android emulator or phone. The `.env` points at the owner's Supabase project, which is already set up (tables, admin user and storage buckets exist), so there is no database setup.
 
-- Flutter 3.41+ (Dart 3.11+) with the Android SDK, and an Android emulator or a physical Android device
-- A recent Node.js (developed on v23) — only if you want to run the backend locally
-- A Supabase project (only if you want your own backend — see below)
+### What you need installed
 
-### 1. Run the app against the live backend (fastest)
+| Tool                          | Version     | Check it with       |
+| ----------------------------- | ----------- | ------------------- |
+| Git                           | any         | `git --version`     |
+| Node.js                       | 18.11+      | `node -v`           |
+| Flutter                       | 3.41+       | `flutter --version` |
+| Android SDK + an emulator or an Android phone | — | `flutter doctor` (the "Android toolchain" line must have a ✓) |
+
+### Step 1. Get the code
+
+```bash
+git clone https://github.com/Ansh-bhamniya/salarybox-assignment.git
+cd salarybox-assignment
+```
+
+### Step 2. Put the `.env` file in `backend/`
+
+The file must end up at exactly `backend/.env`.
+
+```bash
+# macOS / Linux
+cp /path/to/the/.env backend/.env
+
+# Windows (PowerShell)
+Copy-Item C:\path\to\the\.env backend\.env
+```
+
+- The name is `.env` — not `env.txt`, not `.env.local`, not a folder containing it. If it arrived under another name, rename it. Only `.env` is read.
+- The file starts with a dot, so Finder and File Explorer hide it. On macOS press `Cmd+Shift+.` to show hidden files.
+- Check: `ls -a backend` (Windows: `dir backend -Force`) lists `.env`.
+
+### Step 3. Start the backend
+
+```bash
+cd backend
+npm install
+npm run dev
+```
+
+You should see `Attendance backend listening on port 4000`. Leave this terminal open; the backend stops when you close it.
+
+If it exits with `Missing required env var: ...`, the `.env` is missing, misnamed, or in the wrong folder — go back to step 2.
+
+### Step 4. Check the backend works
+
+Open a **second terminal** and run:
+
+```bash
+curl http://localhost:4000/health
+# expected: {"ok":true}
+
+curl -X POST http://localhost:4000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+# expected: JSON containing "role":"admin" and a "token"
+```
+
+If the second command returns an error instead, the `.env` values are wrong or the Supabase project is unreachable; do not continue to step 5.
+
+### Step 5. Run the app
+
+Still in the second terminal:
+
+```bash
+cd frontend
+flutter pub get
+```
+
+Then pick one.
+
+**A. Android emulator**
+
+1. Start an emulator (Android Studio → Device Manager → ▶ next to a device, or `flutter emulators --launch <emulator id>`; list ids with `flutter emulators`).
+2. Give the emulator a camera and a location, because attendance needs both:
+   - Camera: in the emulator's settings (Device Manager → ✎ edit → Show Advanced Settings), set **Front camera** to `Webcam0`, then cold-boot the emulator.
+   - Location: emulator side bar `⋮` → **Location** → pick a point → **Send**.
+3. Run the app. `10.0.2.2` is how the emulator reaches your computer's `localhost`:
+
+   ```bash
+   flutter run --dart-define=API_BASE_URL=http://10.0.2.2:4000
+   ```
+
+**B. Physical Android phone**
+
+1. Enable USB debugging on the phone (Settings → About phone → tap **Build number** 7 times → Developer options → **USB debugging**), connect it by USB and accept the prompt on the phone. `flutter devices` must list it.
+2. Connect the phone to the **same Wi-Fi** as your computer and find the computer's Wi-Fi address:
+
+   ```bash
+   ipconfig getifaddr en0      # macOS
+   hostname -I                 # Linux
+   ipconfig                    # Windows: use the "IPv4 Address" of the Wi-Fi adapter
+   ```
+
+3. Check the phone can reach the backend: open `http://<that address>:4000/health` in the phone's browser. It must show `{"ok":true}`. If it doesn't, allow incoming connections on port 4000 in your computer's firewall.
+4. Run the app, replacing `192.168.1.23` with your address:
+
+   ```bash
+   flutter run --dart-define=API_BASE_URL=http://192.168.1.23:4000
+   ```
+
+The first build downloads Gradle dependencies and can take several minutes. Allow the **camera** and **location** permissions when the app asks.
+
+`flutter run` builds a debug app, which is allowed to use plain `http://` (enabled in `frontend/android/app/src/debug/AndroidManifest.xml`). A release APK is not, so it needs an `https://` backend. Local `http://` is not set up for iOS.
+
+### Step 6. Try it
+
+1. Log in with **`admin`** / **`admin123`**.
+2. Tap **Add staff**, enter a name and an Employee ID (for example `1234`), then **Next: Enrol face**.
+3. Follow the on-screen prompts to take the three enrolment photos of the person's face.
+4. Log out. Log in with that **Employee ID** and password **`staff123`**.
+5. Tap **Mark attendance**. Hold the face inside the oval, turn your head to each side when told, then look straight at the camera. A match records the time and your location.
+6. Log out, log in as admin again, open the staff member: the attendance record (photo, date, time, latitude/longitude) is listed.
+
+### If something goes wrong
+
+| What you see | Cause and fix |
+| --- | --- |
+| `Missing required env var: ...` when starting the backend | `.env` is not at `backend/.env`, is misnamed, or is incomplete. Redo step 2. |
+| `EADDRINUSE` when starting the backend | Port 4000 is taken. Add `PORT=4001` on a new line in `backend/.env`, restart, and use `4001` in every URL below. |
+| App shows a network or "can't connect" error | The backend is not running, or the URL is wrong. Emulator: it must be `http://10.0.2.2:4000` (not `localhost`). Phone: it must be your computer's Wi-Fi address, the phone must be on the same Wi-Fi, and `http://<address>:4000/health` must open in the phone's browser. |
+| `Invalid credentials` | Admin is `admin` / `admin123`. Staff use their Employee ID with `staff123`, and the staff member must already have been added by the admin. |
+| Mark attendance is disabled or says not enrolled | The admin has not enrolled that staff member's face yet (step 6, items 2–3). |
+| Face check keeps failing | Better light, face centred in the oval. To see the raw match score while testing, run the app with `--dart-define=SHOW_MATCH_SCORE=true` added to the `flutter run` command. |
+| `flutter run` asks which device to use, or picks the wrong one | Add `-d <device id>` (ids from `flutter devices`). |
+
+**Good to know:** your local backend reads and writes the **owner's** Supabase project — the same data the live backend uses — so staff, enrolments and attendance you create show up there. The `.env` contains a Supabase service role key with full access to that project: keep it private, and never commit it (`backend/.gitignore` already ignores `.env*`).
+
+## Other ways to run
+
+### Run the app against the live backend (no `.env`, no backend on your machine)
 
 ```bash
 cd frontend
@@ -45,9 +177,9 @@ flutter pub get
 flutter run
 ```
 
-Log in with the demo credentials above. The camera and location permissions are requested on first use, so use a device or emulator with a working camera (and a location set, on the emulator).
+The app's default API URL (`frontend/lib/config/env.dart`) already points at the live backend. Log in with the demo credentials above. The camera and location permissions are requested on first use, so use a device or emulator with a working camera (and a location set, on the emulator).
 
-### 2. Build a release APK
+### Build a release APK
 
 ```bash
 cd frontend
@@ -62,7 +194,9 @@ To target a different backend, override the URL at build or run time:
 flutter build apk --release --dart-define=API_BASE_URL=https://your-backend.example.com
 ```
 
-### 3. Run your own backend (optional)
+### Run the backend against your own Supabase project
+
+Use this if you do not have the shared `.env`. Then run the app as in step 5 above.
 
 **a. Set up Supabase**
 
@@ -92,17 +226,7 @@ npm run dev               # http://localhost:4000
 
 `.env.example` also lists `DATABASE_PASSWORD`; the server does not read it.
 
-**c. Point the app at it**
-
-From the Android emulator, `10.0.2.2` is the host machine's localhost:
-
-```bash
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:4000
-```
-
-A physical device needs your computer's LAN address instead. Plain `http://` may be blocked by Android's cleartext-traffic policy; if the app can't reach a local backend, either use an `https://` URL or allow cleartext traffic in the debug manifest.
-
-### 4. Deploy the backend to Vercel
+### Deploy the backend to Vercel
 
 The project is set up for Vercel: `backend/api/index.js` exports the Express app as a serverless function and `backend/vercel.json` routes every path to it.
 
@@ -112,7 +236,7 @@ The project is set up for Vercel: `backend/api/index.js` exports the Express app
 
 Use the project's production domain (`<project>.vercel.app`) in the app, not a per-deployment URL — those can sit behind Vercel's login wall.
 
-### 5. Tests and analysis
+### Tests and analysis
 
 ```bash
 cd frontend
