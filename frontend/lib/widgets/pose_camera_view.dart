@@ -13,8 +13,8 @@ import './face_oval_mask.dart';
 import './turn_meter.dart';
 
 /// Full-screen selfie camera for the pose-guided screens (enrolment and the
-/// head-turn check): edge-to-edge preview, the framing oval, what to do now, and
-/// a line under the oval showing how far to turn. There is no shutter: [onFrame]
+/// head-turn check): edge-to-edge preview, the framing oval, and under it a line
+/// showing how far to turn, which step this is, what to do and how it is going. There is no shutter: [onFrame]
 /// gets every analysed frame and whoever listens decides what to do with it,
 /// while [guidance] says what to show.
 ///
@@ -127,30 +127,29 @@ class _PoseCameraViewState extends State<PoseCameraView> with WidgetsBindingObse
                       segmentsDone: guidance.ringDone,
                     ),
                   ),
-                  SafeArea(
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: kToolbarHeight + 8),
-                        child: _ShotPrompt(guidance: guidance),
-                      ),
-                    ),
-                  ),
-                  // The turn line, just under the oval and as wide as it is.
+                  // Under the oval: the turn line (as wide as the oval), which step this is and what to do in
+                  // it, then how it is going, a little further down.
                   Positioned(
-                    left: oval.left,
-                    width: oval.width,
+                    left: 16,
+                    right: 16,
                     top: oval.bottom + 18,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        TurnMeter(
-                          turnDegrees: guidance.turnDegrees,
-                          targetMin: guidance.targetMin,
-                          targetMax: guidance.targetMax,
-                          inPosition: guidance.good,
+                        SizedBox(
+                          width: oval.width,
+                          child: TurnMeter(
+                            turnDegrees: guidance.turnDegrees,
+                            targetMin: guidance.targetMin,
+                            targetMax: guidance.targetMax,
+                            inPosition: guidance.good,
+                          ),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 16),
+                        _ShotPrompt(guidance: guidance),
+                        const SizedBox(height: 6),
+                        _Instruction(guidance: guidance),
+                        const SizedBox(height: 22),
                         _MessagePill(guidance: guidance),
                       ],
                     ),
@@ -165,7 +164,7 @@ class _PoseCameraViewState extends State<PoseCameraView> with WidgetsBindingObse
   }
 }
 
-/// "Photo 2 of 3" with one dot per photo, and what to do for this one.
+/// "Photo 2 of 3" with one dot per photo, shown under the oval.
 class _ShotPrompt extends StatelessWidget {
   const _ShotPrompt({required this.guidance});
 
@@ -178,36 +177,48 @@ class _ShotPrompt extends StatelessWidget {
     final total = guidance.totalSteps;
 
     return Semantics(
-      label: '${guidance.heading}. ${guidance.prompt}',
+      label: guidance.heading,
       child: ExcludeSemantics(
-        child: Column(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  guidance.heading,
-                  style: theme.textTheme.labelLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(width: 10),
-                for (var i = 1; i <= total; i++)
-                  Container(
-                    width: 8,
-                    height: 8,
-                    margin: const EdgeInsets.only(right: 4),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: i <= step ? Colors.white : Colors.white.withValues(alpha: 0.35),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 4),
             Text(
-              guidance.prompt,
-              style: theme.textTheme.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+              guidance.heading,
+              style: theme.textTheme.labelLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
             ),
+            const SizedBox(width: 10),
+            for (var i = 1; i <= total; i++)
+              Container(
+                width: 8,
+                height: 8,
+                margin: const EdgeInsets.only(right: 4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: i <= step ? Colors.white : Colors.white.withValues(alpha: 0.35),
+                ),
+              ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// What to do for this step, e.g. "Turn your head to the left", under the oval.
+class _Instruction extends StatelessWidget {
+  const _Instruction({required this.guidance});
+
+  final CameraCoaching guidance;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: guidance.prompt,
+      child: ExcludeSemantics(
+        child: Text(
+          guidance.prompt,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
         ),
       ),
     );
@@ -245,7 +256,7 @@ class _MessagePill extends StatelessWidget {
             Flexible(
               child: Text(
                 guidance.message,
-                style: TextStyle(color: foreground, fontWeight: FontWeight.w600),
+                style: TextStyle(color: foreground, fontWeight: FontWeight.w600, fontSize: 16),
               ),
             ),
           ],

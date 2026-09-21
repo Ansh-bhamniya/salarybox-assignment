@@ -347,6 +347,13 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
   /// A check that did not pass: the person can try again as often as they like.
   void _failed(String message, {double? similarity, bool matchFailure = false, String? reason}) {
     if (isClosed) return;
+    if (!kReleaseMode) {
+      debugPrint(
+        '[attendance] failed: ${matchFailure ? 'no_match' : 'liveness_failed'} reason=$reason '
+        'challenge=${_session.challenge.map((side) => side.name).join(',')} turnsDone=${_session.turnsCompleted} '
+        'phase=${_session.phase.name} similarity=${similarity?.toStringAsFixed(3)}',
+      );
+    }
     emit(
       MarkAttendanceState(
         status: matchFailure ? MarkAttendanceStatus.matchFailed : MarkAttendanceStatus.livenessFailed,
