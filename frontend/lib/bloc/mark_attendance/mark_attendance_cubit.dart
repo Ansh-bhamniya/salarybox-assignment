@@ -170,7 +170,7 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
         _passedAt = _clock();
         unawaited(_verifyAndRecord());
       case LivenessPhase.failed:
-        _failed(LivenessCoach.messageForFailure(_session.failure!));
+        _failed(LivenessCoach.messageForFailure(_session.failure!), reason: _session.failure!.name);
       case LivenessPhase.waitingForFace:
       case LivenessPhase.holdStill:
       case LivenessPhase.turning:
@@ -203,7 +203,7 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
       final turns = [for (var i = 0; i < _session.totalTurns; i++) _kept['turn$i']];
       final end = _kept['final'];
       if (start == null || end == null || turns.any((t) => t == null)) {
-        _failed('The camera did not give a clear picture. Please try again.');
+        _failed('The camera did not give a clear picture. Please try again.', reason: 'missingFrames');
         return;
       }
 
@@ -242,10 +242,10 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
           _failed('', similarity: identity.similarityToEnrolled, matchFailure: true);
           return;
         case IdentityFailure.differentPerson:
-          _failed('The face changed during the check. Only you should be in the picture.');
+          _failed('The face changed during the check. Only you should be in the picture.', reason: 'differentPerson');
           return;
         case IdentityFailure.missingFrames:
-          _failed('The camera did not give a clear picture. Please try again.');
+          _failed('The camera did not give a clear picture. Please try again.', reason: 'missingFrames');
           return;
       }
 
@@ -314,7 +314,7 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
   // ---- outcomes ---------------------------------------------------------------
 
   /// A check that did not pass: try again, or lock the screen after too many in a row.
-  void _failed(String message, {double? similarity, bool matchFailure = false}) {
+  void _failed(String message, {double? similarity, bool matchFailure = false, String? reason}) {
     if (isClosed) return;
     final attempts = state.failedAttempts + 1;
     final MarkAttendanceStatus status;
@@ -324,6 +324,13 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
       status = matchFailure ? MarkAttendanceStatus.matchFailed : MarkAttendanceStatus.livenessFailed;
     }
     emit(MarkAttendanceState(status: status, similarity: similarity, errorMessage: message, failedAttempts: attempts));
+
+    // Let the backend know, so failures can be reviewed. It must never change what the person sees.
+    unawaited(
+      _attendanceService
+          .reportFailedAttempt(outcome: matchFailure ? 'no_match' : 'liveness_failed', reason: reason)
+          .catchError((_) {}),
+    );
   }
 
   /// Trouble that is not the person's fault (network, location…): straight back to a fresh check.

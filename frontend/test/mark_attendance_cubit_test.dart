@@ -196,6 +196,12 @@ class _Harness {
     turn(cubit.challenge.first.opposite);
   }
 
+  /// The failed-check reports that were sent, as the JSON bodies.
+  List<Map<String, Object?>> get reports => [
+    for (final r in adapter.requests.where((r) => r.path == '/attendance/attempts'))
+      (r.data as Map).cast<String, Object?>(),
+  ];
+
   List<RequestOptions> get uploads => adapter.requests.where((r) => r.path == '/attendance').toList();
 
   Map<String, String> get uploadFields => {for (final f in (uploads.single.data as FormData).fields) f.key: f.value};
@@ -490,6 +496,87 @@ void main() {
         expect(h.cubit.state.status, MarkAttendanceStatus.livenessFailed);
         expect(h.cubit.state.errorMessage, isNotNull);
       });
+    });
+  });
+
+  group('failed checks are reported to the backend', () {
+    test('a head-turn check that did not pass, with why', () async {
+      final h = _Harness();
+      await h.start();
+      h.failTheCheck();
+      await pumpEventQueue();
+
+      expect(h.reports, [
+        {'outcome': 'liveness_failed', 'reason': 'wrongDirection'},
+      ]);
+    });
+
+    test('a face that did not match is reported as no_match, with no reason', () async {
+      final h = _Harness(embeddings: [_atCos(0.9), _atCos(0.9), _atCos(0.9), _axis(2)]);
+      await h.start();
+      await h.doTheCheck();
+      await pumpEventQueue();
+
+      expect(h.reports, [
+        {'outcome': 'no_match'},
+      ]);
+    });
+
+    test('a swapped-in face is reported as a failed check, naming it', () async {
+      final h = _Harness(embeddings: [_axis(3), _axis(3), _axis(3), _atCos(0.9)]);
+      await h.start();
+      await h.doTheCheck();
+      await pumpEventQueue();
+
+      expect(h.reports, [
+        {'outcome': 'liveness_failed', 'reason': 'differentPerson'},
+      ]);
+    });
+
+    test('every failure in a row is reported, including the one that locks the screen', () async {
+      final h = _Harness();
+      await h.start();
+      for (var i = 0; i < 3; i++) {
+        h.failTheCheck();
+        if (i < 2) h.cubit.retry();
+      }
+      await pumpEventQueue();
+
+      expect(h.reports.length, 3);
+      expect(h.cubit.state.status, MarkAttendanceStatus.lockedOut);
+    });
+
+    test('a success reports nothing', () async {
+      final h = _Harness();
+      await h.start();
+      await h.doTheCheck();
+      await pumpEventQueue();
+
+      expect(h.cubit.state.status, MarkAttendanceStatus.success);
+      expect(h.reports, isEmpty);
+    });
+
+    test('trouble that is not a failed check (no enrolled face, network) reports nothing', () async {
+      final h = _Harness(staff: _staffJson(templates: false));
+      await h.start();
+      await h.doTheCheck();
+      await pumpEventQueue();
+
+      expect(h.reports, isEmpty);
+    });
+
+    test('if the report cannot be sent, the person still sees exactly the same thing', () async {
+      final h = _Harness();
+      await h.start();
+      h.adapter
+        ..status = 500
+        ..body = '{"error":"down"}';
+      h.failTheCheck();
+      await pumpEventQueue();
+
+      expect(h.cubit.state.status, MarkAttendanceStatus.livenessFailed);
+      expect(h.cubit.state.errorMessage, contains('wrong way'));
+      expect(h.reports.length, 1, reason: 'it was attempted');
     });
   });
 }

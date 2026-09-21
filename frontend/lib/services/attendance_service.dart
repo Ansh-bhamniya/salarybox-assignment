@@ -34,4 +34,14 @@ class AttendanceService {
       await _client.dio.post('/attendance', data: formData);
     });
   }
+
+  /// Tells the backend a check did not pass, so failures can be reviewed:
+  /// [outcome] is `liveness_failed` (the head-turn check) or `no_match` (the
+  /// face was not the enrolled person's), [reason] a short word such as
+  /// `timeout`. Best effort; callers should not let it change what the person sees.
+  Future<void> reportFailedAttempt({required String outcome, String? reason}) {
+    return runApiCall(() async {
+      await _client.dio.post('/attendance/attempts', data: {'outcome': outcome, 'reason': ?reason});
+    });
+  }
 }
