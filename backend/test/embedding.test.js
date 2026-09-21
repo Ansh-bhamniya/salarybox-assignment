@@ -1,7 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ApiError } from '../src/utils/ApiError.js';
-import { DEFAULT_MODEL_VERSION, parseEmbedding, resolveModelVersion } from '../src/utils/embedding.js';
+import {
+  DEFAULT_MODEL_VERSION,
+  MAX_TEMPLATES_PER_ENROLMENT,
+  parseEmbedding,
+  parseEmbeddingSet,
+  resolveModelVersion,
+} from '../src/utils/embedding.js';
 
 const unit = (n = 192) => Array.from({ length: n }, () => 1 / Math.sqrt(n));
 
@@ -52,4 +58,23 @@ test('parseEmbedding rejects vectors that are not unit length', () => {
 
 test('parseEmbedding tolerates float noise around unit length', () => {
   assert.equal(parseEmbedding(unit().map((v) => v * 1.005), DEFAULT_MODEL_VERSION).length, 192);
+});
+
+test('parseEmbeddingSet accepts 1..5 valid embeddings, as a JSON string or an array', () => {
+  const three = [unit(), unit(), unit()];
+  assert.equal(parseEmbeddingSet(JSON.stringify(three), DEFAULT_MODEL_VERSION).length, 3);
+  assert.equal(parseEmbeddingSet([unit()], DEFAULT_MODEL_VERSION).length, 1);
+  assert.equal(parseEmbeddingSet(new Array(MAX_TEMPLATES_PER_ENROLMENT).fill(unit()), DEFAULT_MODEL_VERSION).length, 5);
+});
+
+test('parseEmbeddingSet rejects an empty set, too many, and non-arrays', () => {
+  rejects(() => parseEmbeddingSet([], DEFAULT_MODEL_VERSION), 'embeddings must contain 1 to 5 embeddings');
+  rejects(() => parseEmbeddingSet(new Array(6).fill(unit()), DEFAULT_MODEL_VERSION), 'embeddings must contain 1 to 5 embeddings');
+  rejects(() => parseEmbeddingSet('{"a":1}', DEFAULT_MODEL_VERSION), 'embeddings must contain 1 to 5 embeddings');
+  rejects(() => parseEmbeddingSet('not json', DEFAULT_MODEL_VERSION), 'embeddings must be a JSON array of embeddings');
+});
+
+test('parseEmbeddingSet validates every embedding in the set', () => {
+  rejects(() => parseEmbeddingSet([unit(), unit(8)], DEFAULT_MODEL_VERSION), 'embedding must have 192 values');
+  rejects(() => parseEmbeddingSet([unit(), unit().map((v) => v * 2)], DEFAULT_MODEL_VERSION), 'embedding must be unit length');
 });

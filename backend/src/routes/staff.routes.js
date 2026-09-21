@@ -14,7 +14,10 @@ staffRoutes.get('/:id', asyncHandler(staffController.getById));
 staffRoutes.post(
   '/:id/enroll',
   requireRole('admin'),
-  upload.single('photo'),
+  upload.fields([
+    { name: 'photo', maxCount: 1 },
+    { name: 'photos', maxCount: 5 },
+  ]),
   asyncHandler(staffController.enroll)
 );
 // Admins can read anyone's history; staff only their own (checked in the controller).

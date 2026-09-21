@@ -8,11 +8,17 @@ export function errorHandler(err, req, res, next) {
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(413).json({ error: 'File too large (max 8MB)' });
     }
+    if (err.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({ error: 'Too many files' });
+    }
     return res.status(400).json({ error: err.message });
   }
 
   if (err instanceof ApiError) {
-    return res.status(err.status).json(err.code ? { error: err.message, code: err.code } : { error: err.message });
+    const body = { error: err.message };
+    if (err.code) body.code = err.code;
+    if (err.details !== undefined) body.details = err.details;
+    return res.status(err.status).json(body);
   }
 
   console.error(err);

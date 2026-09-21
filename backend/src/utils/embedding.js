@@ -48,3 +48,22 @@ export function parseEmbedding(raw, modelVersion) {
 
   return value;
 }
+
+export const MAX_TEMPLATES_PER_ENROLMENT = 5;
+
+/** Accepts a JSON string (or array) holding 1..5 embeddings and returns them validated. */
+export function parseEmbeddingSet(raw, modelVersion) {
+  let value = raw;
+  if (typeof raw === 'string') {
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      throw new ApiError(400, 'embeddings must be a JSON array of embeddings');
+    }
+  }
+
+  if (!Array.isArray(value) || value.length < 1 || value.length > MAX_TEMPLATES_PER_ENROLMENT) {
+    throw new ApiError(400, `embeddings must contain 1 to ${MAX_TEMPLATES_PER_ENROLMENT} embeddings`);
+  }
+  return value.map((embedding) => parseEmbedding(embedding, modelVersion));
+}

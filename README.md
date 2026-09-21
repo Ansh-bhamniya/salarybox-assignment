@@ -67,7 +67,7 @@ flutter build apk --release --dart-define=API_BASE_URL=https://your-backend.exam
 **a. Set up Supabase**
 
 1. Create a Supabase project.
-2. In the SQL editor, run [`backend/db/schema.sql`](backend/db/schema.sql). It creates the tables (`users`, `staff`, `face_templates`, `attendance`, `attendance_attempts`, `audit_log`), the `enrol_face` function, turns on row level security, and seeds the admin user. It is safe to re-run, so run it again to upgrade an existing project — it also backfills existing enrolments into `face_templates`.
+2. In the SQL editor, run [`backend/db/schema.sql`](backend/db/schema.sql). It enables the `vector` (pgvector) extension, creates the tables (`users`, `staff`, `face_templates`, `attendance`, `attendance_attempts`, `audit_log`) and the enrolment functions, turns on row level security, and seeds the admin user. It is safe to re-run, so run it again to upgrade an existing project — it also backfills existing enrolments into `face_templates`.
 3. In Storage, create two **public** buckets: `enrollment-photos` and `attendance-selfies`.
 
 **b. Configure and start the API**
@@ -85,6 +85,7 @@ npm run dev               # http://localhost:4000
 | `SUPABASE_SERVICE_ROLE_KEY` | yes      | Server-side only — never put this in the app       |
 | `JWT_SECRET`                | yes      | Any long random string                             |
 | `STAFF_DUMMY_PASSWORD`      | no       | Shared staff password, defaults to `staff123`      |
+| `DUPLICATE_FACE_THRESHOLD`  | no       | Cosine similarity (0–1] at which a face being enrolled counts as "already enrolled under someone else"; defaults to `0.6` |
 | `PORT`                      | no       | Defaults to `4000`                                 |
 
 `.env.example` also lists `DATABASE_PASSWORD`; the server does not read it.
@@ -125,7 +126,7 @@ The backend tests cover input validation and error responses; they don't need a 
 ## How it works
 
 1. **Admin** logs in → **Staff list** → **Add staff** (name + Employee ID).
-2. **Face enrolment:** the front camera captures a face, ML Kit detects and crops it, the TFLite model produces an embedding, and the embedding plus the photo are uploaded.
+2. **Face enrolment:** the front camera takes three photos (straight, slightly left, slightly right). For each, ML Kit detects and crops the face and the TFLite model produces an embedding; the photos and embeddings are uploaded together. If the face already belongs to another staff member the server refuses, and the admin can override with a reason that is audited.
 3. **Staff** logs in with their Employee ID → **Mark attendance:** selfie → face detected → embedding compared (cosine similarity) with the enrolled one, fetched fresh from the backend → if it matches, GPS location and timestamp are captured and the record is uploaded. If it doesn't match, nothing is saved.
 4. **Admin** opens a staff profile to see their history: selfie, date, time, and latitude/longitude for each record.
 
@@ -136,8 +137,8 @@ The backend tests cover input validation and error responses; they don't need a 
 | POST   | `/auth/login`            | anyone         | Returns a JWT (12 h) and the role       |
 | GET    | `/staff`                 | admin          | List staff (each with an `enrolled` flag) |
 | POST   | `/staff`                 | admin          | Create staff                            |
-| GET    | `/staff/:id`             | admin, or self | Profile including the face embedding    |
-| POST   | `/staff/:id/enroll`      | admin          | Upload enrolment photo + embedding (+ `modelVersion`) |
+| GET    | `/staff/:id`             | admin, or self | Profile including the active face templates |
+| POST   | `/staff/:id/enroll`      | admin          | Upload 1–5 captures: `photos` + `embeddings` (+ `modelVersion`, `reason`, `allowDuplicate`). 409 `duplicate_face` if the face matches another staff member. The original single `photo` + `embedding` form is still accepted |
 | GET    | `/staff/:id/attendance`  | admin, or self | Attendance history                      |
 | POST   | `/attendance`            | staff (self)   | Record attendance (multipart selfie). 409 `not_enrolled` if the person has no active face |
 
@@ -153,7 +154,8 @@ The backend tests cover input validation and error responses; they don't need a 
 
 - There is **no liveness or anti-spoofing** check. A printed photo or a photo on another screen could pass.
 - The match threshold (`0.55` cosine similarity, in `frontend/lib/config/env.dart`) was calibrated offline on public LFW photos, not on real enrolment/selfie pairs from this app. Expect to tune it. Build with `--dart-define=SHOW_MATCH_SCORE=true` to show the raw score on the result screen while calibrating.
-- One active face per staff member. Re-enrolling replaces it; the previous template is kept, marked revoked, with an audit entry.
+- Each person is enrolled from three photos and matched against all of them (best score wins). Re-enrolling replaces the whole set; the old templates are kept, marked revoked, with a reason and an audit entry. Templates never update themselves from later selfies, and staff are not notified when they are re-enrolled.
+- Duplicate-face detection compares a new enrolment with everyone else's active templates (pgvector, same face-model version only). Its threshold (`DUPLICATE_FACE_THRESHOLD`, default 0.6) is a provisional guess until calibrated on real photos, so it can miss a match or flag a lookalike; an admin can override a flag with a reason. Two enrolments of the same face at the very same moment could both slip through.
 - Staff can't mark attendance until an admin has enrolled their face. The app disables the button, and the server also refuses the record (409 `not_enrolled`) and logs the attempt.
 
 **Location and time**

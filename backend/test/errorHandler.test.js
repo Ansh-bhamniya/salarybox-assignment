@@ -29,3 +29,14 @@ test('an ApiError without a code keeps the original { error } shape', () => {
   assert.equal(res.statusCode, 404);
   assert.deepEqual(res.body, { error: 'Staff not found' });
 });
+
+test('an ApiError with details passes them through', () => {
+  const details = { matches: [{ employeeId: 'E-1', similarity: 0.83 }] };
+  const res = run(new ApiError(409, 'This face looks like an already enrolled staff member', 'duplicate_face', details));
+  assert.equal(res.statusCode, 409);
+  assert.deepEqual(res.body, {
+    error: 'This face looks like an already enrolled staff member',
+    code: 'duplicate_face',
+    details,
+  });
+});

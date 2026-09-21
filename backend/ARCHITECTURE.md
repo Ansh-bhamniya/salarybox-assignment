@@ -81,18 +81,32 @@ check `req.user.role`.
 
 ## Face templates
 
-Enrolment never overwrites. Each enrolled face is a row in `face_templates`
-(embedding + `model_version` + who enrolled it). `enrol_face()` — a Postgres
+Enrolment never overwrites. Each captured face is a row in `face_templates`
+(embedding + `model_version` + `shot_index` + who enrolled it); a person is
+enrolled from 1–5 captures (the app takes 3). `enrol_faces()` — a Postgres
 function, so it is atomic — revokes the person's active templates, inserts the
-new one, refreshes the legacy `staff.face_embedding` / `enrollment_photo_url` /
-`enrolled_at` columns (kept only for app builds that predate the table) and
-writes an `audit_log` entry. "Enrolled" everywhere means "has an active
-template". `POST /attendance` returns 409 `not_enrolled` (and records the
-refusal in `attendance_attempts`) for anyone without one.
+new ones, refreshes the legacy `staff.face_embedding` / `enrollment_photo_url` /
+`enrolled_at` columns from the first shot (kept only for app builds that
+predate the table) and writes an `audit_log` entry with the reason. If any
+capture is bad, nothing changes. `enrol_face()` (one template) is a thin
+wrapper kept for backends deployed before `enrol_faces` existed.
+
+"Enrolled" everywhere means "has an active template". `POST /attendance`
+returns 409 `not_enrolled` (and records the refusal in `attendance_attempts`)
+for anyone without one. `GET /staff/:id` returns every active template so the
+staff device can match against all of them and take the best score.
+
+**Duplicate faces.** Each template also has a pgvector copy (`embedding_vec`)
+with an HNSW cosine index. Before enrolling, the API asks
+`find_duplicate_face()` for other staff whose active templates of the same
+model version score at or above `DUPLICATE_FACE_THRESHOLD`; if any do, it
+answers 409 `duplicate_face` (with who they are) unless the admin re-sends with
+`allowDuplicate=true` and a `reason`, which is stored in the audit entry.
 
 Uploaded embeddings are validated (known model version, right length, unit
 length) before they are stored. Row level security is on for every table with
-no policies: only the API's service-role key can read or write them.
+no policies: only the API's service-role key can read or write them, and the
+functions are executable by the service role only.
 
 ## Env vars (`.env`)
 
