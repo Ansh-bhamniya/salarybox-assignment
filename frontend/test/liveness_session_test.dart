@@ -84,6 +84,15 @@ _Sim _started({List<TurnSide> challenge = const [TurnSide.left, TurnSide.right],
 }
 
 void main() {
+  test('the attendance screen holds still as long as an enrolment photo, before and after the turns', () {
+    expect(LivenessConfig.attendance.holdStillFor, const Duration(milliseconds: 1500));
+    expect(LivenessConfig.attendance.finalHoldFor, const Duration(milliseconds: 1500));
+    expect(LivenessConfig.attendance.holdStillFor, greaterThan(const LivenessConfig().holdStillFor));
+    // Everything else is the same as the defaults.
+    expect(LivenessConfig.attendance.turnYawDegrees, const LivenessConfig().turnYawDegrees);
+    expect(LivenessConfig.attendance.sessionTimeout, greaterThan(LivenessConfig.attendance.holdStillFor * 4));
+  });
+
   group('happy path', () {
     test('left then right passes, and asks for the right frames to be kept', () {
       final sim = _Sim(LivenessSession(challenge: const [TurnSide.left, TurnSide.right]));

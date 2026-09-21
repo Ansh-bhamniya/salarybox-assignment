@@ -52,6 +52,7 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
     this.finalFrames = 5,
     bool? framesMirrored,
     Random? random,
+    LivenessConfig config = LivenessConfig.attendance,
     Locator? locate,
     Future<String> Function()? newPhotoPath,
     DateTime Function()? clock,
@@ -62,6 +63,7 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
        _attendanceService = attendanceService,
        _framesMirrored = framesMirrored ?? Env.livenessFramesMirrored,
        _random = random ?? Random(),
+       _config = config,
        _locate = locate ?? _currentPosition,
        _newPhotoPath = newPhotoPath ?? _defaultPhotoPath,
        _clock = clock ?? DateTime.now,
@@ -76,6 +78,7 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
   final AttendanceService _attendanceService;
   final bool _framesMirrored;
   final Random _random;
+  final LivenessConfig _config;
   final Locator _locate;
   final Future<String> Function() _newPhotoPath;
   final DateTime Function() _clock;
@@ -144,7 +147,7 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
   // ---- the check ------------------------------------------------------------
 
   void _startAttempt() {
-    _session = LivenessSession.random(_random);
+    _session = LivenessSession.random(_random, config: _config);
     _coach = LivenessCoach(_session);
     _kept.clear();
     _recentStraight.clear();

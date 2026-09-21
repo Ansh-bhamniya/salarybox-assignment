@@ -104,6 +104,7 @@ class _Harness {
       finalFrames: finalFrames,
       framesMirrored: true,
       random: Random(1),
+      config: const LivenessConfig(), // the shortest holds, so the tests don't need many frames
       locate: locate ?? () async => (latitude: 28.6139, longitude: 77.209),
       newPhotoPath: () async => photo.path,
       clock: () => now,

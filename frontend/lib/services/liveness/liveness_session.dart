@@ -32,6 +32,14 @@ class LivenessConfig {
     this.peakYawMax = 28,
   });
 
+  /// What the attendance screen uses: the two holds (before the turns and after them) are as long as an
+  /// enrolment photo's, so the ring fills at a pace people can follow. The plain defaults are the shortest
+  /// the check is sound with, and what the unit tests are written against.
+  static const attendance = LivenessConfig(
+    holdStillFor: Duration(milliseconds: 1500),
+    finalHoldFor: Duration(milliseconds: 1500),
+  );
+
   /// A turn needs the head at least this far round from straight (ML Kit's Euler Y size)...
   /// (14°: on a real phone a clear turn showed the nose well past its limit at 16°, so 18° rejected honest turns.)
   final double turnYawDegrees;
