@@ -184,6 +184,7 @@ class LivenessSession {
   final LivenessConfig config;
 
   LivenessPhase _phase = LivenessPhase.waitingForFace;
+  Duration _lastAt = Duration.zero;
   LivenessFailure? _failure;
   LivenessResult? _result;
 
@@ -232,6 +233,28 @@ class LivenessSession {
   double get baselineYaw => _baselineYaw;
   double get baselineRatio => _baselineRatio;
 
+  /// 0..1 of the current hold that is done as of the last observation: the
+  /// initial hold still, or the final look straight.
+  double get holdProgress {
+    final Duration? since;
+    final Duration length;
+    switch (_phase) {
+      case LivenessPhase.holdStill:
+        since = _phaseSince;
+        length = config.holdStillFor;
+      case LivenessPhase.lookStraight:
+        since = _neutralSince;
+        length = config.finalHoldFor;
+      case LivenessPhase.waitingForFace:
+      case LivenessPhase.turning:
+      case LivenessPhase.passed:
+      case LivenessPhase.failed:
+        return _phase == LivenessPhase.passed ? 1 : 0;
+    }
+    if (since == null) return 0;
+    return ((_lastAt - since).inMicroseconds / length.inMicroseconds).clamp(0.0, 1.0);
+  }
+
   /// The side to turn to right now, while a turn is being asked for.
   TurnSide? get target => _phase == LivenessPhase.turning ? challenge[_turnIndex] : null;
 
@@ -240,6 +263,7 @@ class LivenessSession {
   KeepFrame? onObservation(FaceObservation o) {
     if (isFinished) return null;
     final now = o.at;
+    _lastAt = now;
 
     final started = _sessionStart;
     if (started != null && now - started > config.sessionTimeout) return _fail(LivenessFailure.timeout);

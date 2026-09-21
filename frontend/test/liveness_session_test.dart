@@ -617,4 +617,64 @@ void main() {
       expect(sim.session.turnsCompleted, 1);
     });
   });
+
+  group('how far the current hold has got', () {
+    test('is nothing before the hold starts, fills while holding still, and is full once passed', () {
+      final sim = _Sim(LivenessSession(challenge: const [TurnSide.left, TurnSide.right]));
+      expect(sim.session.holdProgress, 0);
+
+      sim.frame(); // the hold starts
+      sim.frame();
+      final early = sim.session.holdProgress;
+      sim.frame();
+      sim.frame();
+      sim.frame();
+      final later = sim.session.holdProgress;
+
+      expect(early, greaterThan(0));
+      expect(later, greaterThan(early));
+      expect(later, lessThan(1));
+
+      sim.neutral(ms(300));
+      sim.turn(TurnSide.left);
+      sim.frame();
+      sim.turn(TurnSide.right);
+      sim.neutral(ms(600));
+      expect(sim.session.phase, LivenessPhase.passed);
+      expect(sim.session.holdProgress, 1);
+    });
+
+    test('is nothing while turning', () {
+      final sim = _started();
+      expect(sim.session.holdProgress, 0);
+      sim.turn(TurnSide.left, frames: 1);
+      expect(sim.session.holdProgress, 0);
+    });
+
+    test('fills during the final look straight, and starts over if the head drifts', () {
+      final sim = _started();
+      sim.turn(TurnSide.left);
+      sim.frame();
+      sim.turn(TurnSide.right);
+      expect(sim.session.phase, LivenessPhase.lookStraight);
+      expect(sim.session.holdProgress, 0);
+
+      sim.neutral(ms(300));
+      final part = sim.session.holdProgress;
+      expect(part, greaterThan(0.3));
+      expect(part, lessThan(1));
+
+      for (var i = 0; i < 3; i++) {
+        sim.frame(yaw: 15, ratio: 0.12); // drifted off straight for longer than the grace
+      }
+      expect(sim.session.holdProgress, 0);
+    });
+
+    test('is nothing after a failure', () {
+      final sim = _started();
+      sim.turn(TurnSide.right);
+      expect(sim.session.phase, LivenessPhase.failed);
+      expect(sim.session.holdProgress, 0);
+    });
+  });
 }

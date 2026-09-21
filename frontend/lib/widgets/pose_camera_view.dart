@@ -6,17 +6,17 @@ import '../config/env.dart';
 import '../config/theme/app_icons.dart';
 import '../config/theme/app_radius.dart';
 import '../services/camera_capture_controller.dart';
-import '../services/liveness/enrolment_pose_guide.dart';
-import '../services/liveness/face_observation.dart';
+import '../services/liveness/camera_coaching.dart';
 import '../services/liveness/liveness_analyzer.dart';
 import './cover_camera_preview.dart';
 import './face_oval_mask.dart';
 import './turn_meter.dart';
 
-/// Full-screen selfie camera for the pose-guided enrolment: edge-to-edge
-/// preview, the framing oval, what to do for this photo, and a line under the
-/// oval showing how far to turn. There is no shutter: [onObservation] gets every
-/// analysed frame and whoever listens takes the photo when the pose is right.
+/// Full-screen selfie camera for the pose-guided screens (enrolment and the
+/// head-turn check): edge-to-edge preview, the framing oval, what to do now, and
+/// a line under the oval showing how far to turn. There is no shutter: [onFrame]
+/// gets every analysed frame and whoever listens decides what to do with it,
+/// while [guidance] says what to show.
 ///
 /// Expects [camera] to be initialized. While [busy] (a photo is being taken and
 /// processed) the live analysis pauses.
@@ -25,13 +25,13 @@ class PoseCameraView extends StatefulWidget {
     super.key,
     required this.camera,
     required this.guidance,
-    required this.onObservation,
+    required this.onFrame,
     this.busy = false,
   });
 
   final CameraCaptureController camera;
-  final ValueListenable<PoseGuidance> guidance;
-  final void Function(FaceObservation observation) onObservation;
+  final ValueListenable<CameraCoaching> guidance;
+  final void Function(AnalyzedFrame frame) onFrame;
   final bool busy;
 
   @override
@@ -40,8 +40,8 @@ class PoseCameraView extends StatefulWidget {
 
 class _PoseCameraViewState extends State<PoseCameraView> with WidgetsBindingObserver {
   late final LivenessAnalyzer _analyzer;
-  StreamSubscription<FaceObservation>? _subscription;
-  PoseAdvice? _lastAdvice;
+  StreamSubscription<AnalyzedFrame>? _subscription;
+  bool _wasSaved = false;
 
   @override
   void initState() {
@@ -54,7 +54,7 @@ class _PoseCameraViewState extends State<PoseCameraView> with WidgetsBindingObse
       sensorOrientation: widget.camera.controller!.description.sensorOrientation,
       framesMirrored: Env.livenessFramesMirrored,
     );
-    _subscription = _analyzer.observations.listen((o) => widget.onObservation(o));
+    _subscription = _analyzer.frames.listen((frame) => widget.onFrame(frame));
     widget.guidance.addListener(_onGuidance);
     _startStream();
   }
@@ -63,9 +63,9 @@ class _PoseCameraViewState extends State<PoseCameraView> with WidgetsBindingObse
   /// the person feels it without having to look.
   void _onGuidance() {
     final g = widget.guidance.value;
-    if (g.shouldCapture) HapticFeedback.lightImpact();
-    if (g.advice == PoseAdvice.saved && _lastAdvice != PoseAdvice.saved) HapticFeedback.mediumImpact();
-    _lastAdvice = g.advice;
+    if (g.capturing) HapticFeedback.lightImpact();
+    if (g.saved && !_wasSaved) HapticFeedback.mediumImpact();
+    _wasSaved = g.saved;
   }
 
   @override
@@ -111,7 +111,7 @@ class _PoseCameraViewState extends State<PoseCameraView> with WidgetsBindingObse
         builder: (context, constraints) {
           final oval = faceOvalRect(constraints.biggest);
 
-          return ValueListenableBuilder<PoseGuidance>(
+          return ValueListenableBuilder<CameraCoaching>(
             valueListenable: widget.guidance,
             builder: (context, guidance, _) {
               return Stack(
@@ -120,8 +120,8 @@ class _PoseCameraViewState extends State<PoseCameraView> with WidgetsBindingObse
                   CoverCameraPreview(controller: controller),
                   CustomPaint(
                     painter: FaceOvalMaskPainter(
-                      ringColor: guidance.advice == PoseAdvice.saved ? accent : Colors.white.withValues(alpha: 0.85),
-                      progress: guidance.inPosition ? guidance.holdProgress : 0,
+                      ringColor: guidance.saved ? accent : Colors.white.withValues(alpha: 0.85),
+                      progress: guidance.ringProgress,
                       progressColor: accent,
                     ),
                   ),
@@ -146,7 +146,7 @@ class _PoseCameraViewState extends State<PoseCameraView> with WidgetsBindingObse
                           turnDegrees: guidance.turnDegrees,
                           targetMin: guidance.targetMin,
                           targetMax: guidance.targetMax,
-                          inPosition: guidance.inPosition,
+                          inPosition: guidance.good,
                         ),
                         const SizedBox(height: 14),
                         _MessagePill(guidance: guidance),
@@ -167,16 +167,16 @@ class _PoseCameraViewState extends State<PoseCameraView> with WidgetsBindingObse
 class _ShotPrompt extends StatelessWidget {
   const _ShotPrompt({required this.guidance});
 
-  final PoseGuidance guidance;
+  final CameraCoaching guidance;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final step = guidance.shotIndex + 1;
-    final total = guidance.totalShots;
+    final step = guidance.step;
+    final total = guidance.totalSteps;
 
     return Semantics(
-      label: 'Photo $step of $total. ${guidance.prompt}',
+      label: '${guidance.heading}. ${guidance.prompt}',
       child: ExcludeSemantics(
         child: Column(
           children: [
@@ -184,7 +184,7 @@ class _ShotPrompt extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Photo $step of $total',
+                  guidance.heading,
                   style: theme.textTheme.labelLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(width: 10),
@@ -216,12 +216,12 @@ class _ShotPrompt extends StatelessWidget {
 class _MessagePill extends StatelessWidget {
   const _MessagePill({required this.guidance});
 
-  final PoseGuidance guidance;
+  final CameraCoaching guidance;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final good = guidance.inPosition || guidance.advice == PoseAdvice.saved;
+    final good = guidance.good;
     // "Good" uses the accent, so its text must be the colour meant for it
     // (white on green in light mode, black on white in dark mode).
     final foreground = good ? scheme.onPrimary : Colors.white;

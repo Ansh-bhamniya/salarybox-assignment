@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import '../camera_input_image.dart';
+import './camera_frame.dart';
 import './face_observation.dart';
 import './pose_estimator.dart';
 
@@ -22,14 +23,16 @@ class AnalyzerStats {
   final int frameHeight;
 }
 
-/// One analysed frame: what it says ([observation]), the picture itself and where
-/// ML Kit found the face on it. [image] is only valid while it is being handled —
-/// the camera reuses its buffers — so copy it (`CameraFrame.fromCameraImage`) to keep it.
+/// One analysed frame: what it says ([observation]), a way to copy the picture
+/// ([snapshot]) and where ML Kit found the face on it.
 class AnalyzedFrame {
-  const AnalyzedFrame({required this.observation, required this.image, this.faceBox});
+  const AnalyzedFrame({required this.observation, required this.snapshot, this.faceBox});
 
   final FaceObservation observation;
-  final CameraImage image;
+
+  /// Copies this frame's picture so it can be kept; null if its format can't be
+  /// read. The camera reuses its buffers, so call it while handling the frame.
+  final CameraFrame? Function() snapshot;
 
   /// The face's box in the upright picture, when exactly one face was found.
   final Rect? faceBox;
@@ -111,7 +114,7 @@ class LivenessAnalyzer {
       _frames.add(
         AnalyzedFrame(
           observation: observation,
-          image: image,
+          snapshot: () => CameraFrame.fromCameraImage(image, sensorOrientation),
           faceBox: faces.length == 1 ? faces.single.boundingBox : null,
         ),
       );

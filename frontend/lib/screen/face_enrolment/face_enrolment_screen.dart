@@ -171,7 +171,7 @@ class _FaceEnrolmentViewState extends State<_FaceEnrolmentView> {
             PoseCameraView(
               camera: cubit.camera,
               guidance: cubit.guidance,
-              onObservation: cubit.onObservation,
+              onFrame: (frame) => cubit.onObservation(frame.observation),
               busy: processing,
             ),
             LoadingOverlay(visible: processing, message: 'Analyzing face…'),

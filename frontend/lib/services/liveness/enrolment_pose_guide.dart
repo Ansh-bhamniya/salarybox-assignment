@@ -1,5 +1,7 @@
 import 'dart:math';
+import './camera_coaching.dart';
 import './face_observation.dart';
+import './turn_reading.dart';
 
 /// The poses an enrolment asks for, in order: straight on, then a little to
 /// each side, so the templates cover a small change of angle later.
@@ -119,7 +121,7 @@ class EnrolmentPoseConfig {
 }
 
 /// What to show and whether to fire the camera.
-class PoseGuidance {
+class PoseGuidance implements CameraCoaching {
   const PoseGuidance({
     required this.advice,
     required this.message,
@@ -136,6 +138,7 @@ class PoseGuidance {
   final PoseAdvice advice;
 
   /// One short sentence for the person, e.g. "Turn a little more".
+  @override
   final String message;
 
   final EnrolmentPose pose;
@@ -147,10 +150,13 @@ class PoseGuidance {
   /// How far the head is turned right now, in degrees, **positive toward the
   /// person's own left**, measured from their straight-ahead baseline. Null if
   /// there is no usable face.
+  @override
   final double? turnDegrees;
 
   /// The range of [turnDegrees] that is right for this photo.
+  @override
   final double targetMin;
+  @override
   final double targetMax;
 
   /// 0..1: how much of the hold is done.
@@ -162,7 +168,29 @@ class PoseGuidance {
   /// In position and being held (or about to be taken).
   bool get inPosition => advice == PoseAdvice.holdStill;
 
+  @override
   String get prompt => pose.prompt;
+
+  @override
+  String get heading => 'Photo ${shotIndex + 1} of $totalShots';
+
+  @override
+  int get step => shotIndex + 1;
+
+  @override
+  int get totalSteps => totalShots;
+
+  @override
+  bool get good => inPosition || advice == PoseAdvice.saved;
+
+  @override
+  bool get saved => advice == PoseAdvice.saved;
+
+  @override
+  bool get capturing => shouldCapture;
+
+  @override
+  double get ringProgress => inPosition ? holdProgress : 0;
 }
 
 /// Watches the live pose and decides when each enrolment photo should be taken:
@@ -201,8 +229,11 @@ class EnrolmentPoseGuide {
 
   bool _justAccepted = false;
   Duration? _savedUntil;
-  int? _learnedRelation;
-  double? _smoothedTurn;
+  late final TurnReading _turn = TurnReading(
+    defaultRelation: config.defaultYawRelation,
+    smoothing: config.smoothing,
+    learnNoseMin: config.turnNoseMin,
+  );
 
   int get shotIndex => _index;
   int get totalShots => plan.length;
@@ -276,7 +307,7 @@ class EnrolmentPoseGuide {
     }
     if (!o.usable) {
       _bad(o.at);
-      _smoothedTurn = null;
+      _turn.clearSmoothing();
       return _guidance(PoseAdvice.noFace, 'Position your face inside the oval');
     }
 
@@ -284,7 +315,7 @@ class EnrolmentPoseGuide {
     final ratio = o.turnRatio!;
     final relYaw = yaw - _baselineYaw;
     final relRatio = ratio - _baselineRatio;
-    final turn = _smooth(_personSignedYaw(relYaw, relRatio));
+    final turn = _turn.read(relYaw, relRatio);
 
     final framing = _framingAdvice(o);
     if (framing != null) {
@@ -383,8 +414,7 @@ class EnrolmentPoseGuide {
     _baselineRatio = 0;
     _hasBaseline = false;
     _pendingBaseline = null;
-    _learnedRelation = null;
-    _smoothedTurn = null;
+    _turn.reset();
     _savedUntil = null;
     _justAccepted = false;
     _resetHold();
@@ -448,27 +478,7 @@ class EnrolmentPoseGuide {
     _ => '',
   };
 
-  /// How far the head is turned, in degrees, positive toward the person's own
-  /// left. Taken from the head angle itself, whose sign flickers far less than
-  /// the nose offset's does around straight; which way the angle runs against
-  /// the person's left is learned from the first clear turn.
-  double _personSignedYaw(double relYaw, double relRatio) {
-    if (relYaw.abs() >= 10 && relRatio.abs() >= config.turnNoseMin) {
-      _learnedRelation = (relYaw > 0 ? 1 : -1) * (relRatio > 0 ? 1 : -1);
-    }
-    final relation = _learnedRelation ?? config.defaultYawRelation;
-    return relation * relYaw;
-  }
-
-  double _smooth(double value) {
-    final previous = _smoothedTurn;
-    return _smoothedTurn = previous == null ? value : previous + config.smoothing * (value - previous);
-  }
-
-  double? _turnOf(FaceObservation o) {
-    if (!o.usable) return null;
-    return _smoothedTurn;
-  }
+  double? _turnOf(FaceObservation o) => o.usable ? _turn.current : null;
 
   PoseGuidance _guidance(PoseAdvice advice, String message, {double? turn, double progress = 0, bool capture = false}) {
     final range = target;
