@@ -14,6 +14,8 @@ import '../di/service_locator.dart';
 import '../../utils/go_router_refresh_stream.dart';
 import '../../screen/onboarding/onboarding_screen.dart';
 import '../../screen/splash/splash_screen.dart';
+import '../../screen/liveness_debug/liveness_debug_screen.dart';
+import '../env.dart';
 import '../../utils/helpers/onboarding_helper.dart';
 import '../../utils/routes.dart';
 
@@ -22,13 +24,17 @@ GoRouter buildRouter() {
   final splashDone = ValueNotifier<bool>(false);
 
   return GoRouter(
-    initialLocation: Routes.splash,
+    // A build made for tuning the head-turn check opens straight into its debug screen.
+    initialLocation: Env.livenessDebug ? Routes.livenessDebug : Routes.splash,
     refreshListenable: Listenable.merge([GoRouterRefreshStream(sl<AuthCubit>().stream), splashDone]),
     redirect: (context, state) {
       final authState = sl<AuthCubit>().state;
       final onSplash = state.matchedLocation == Routes.splash;
       final loggingIn = state.matchedLocation == Routes.login;
       final onboarding = state.matchedLocation == Routes.onboarding;
+
+      // The tuning screen is reachable signed out, and only in builds that ask for it.
+      if (Env.livenessDebug && state.matchedLocation == Routes.livenessDebug) return null;
 
       // Stay on the splash until its time is up.
       if (onSplash && !splashDone.value) return null;
@@ -63,6 +69,8 @@ GoRouter buildRouter() {
         path: Routes.splash,
         builder: (context, state) => SplashScreen(onFinished: () => splashDone.value = true),
       ),
+      if (Env.livenessDebug)
+        GoRoute(path: Routes.livenessDebug, builder: (context, state) => const LivenessDebugScreen()),
       GoRoute(path: Routes.onboarding, builder: (context, state) => const OnboardingScreen()),
       GoRoute(path: Routes.login, builder: (context, state) => const LoginScreen()),
       // Admin. Listed most specific first: '/staff/add' must win over '/staff/:id'.

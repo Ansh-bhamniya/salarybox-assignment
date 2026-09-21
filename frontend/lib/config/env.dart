@@ -15,6 +15,11 @@ class Env {
     defaultValue: 'https://salarybox-backend.vercel.app',
   );
 
+  /// Shows the liveness tuning screen (a link on the login screen) so the head-turn
+  /// check can be measured on a real device. Off in normal builds:
+  /// `--dart-define=LIVENESS_DEBUG=true`.
+  static const livenessDebug = bool.fromEnvironment('LIVENESS_DEBUG');
+
   /// Whether the live camera stream arrives mirrored, the way a mirror shows it,
   /// which flips which way a head turn reads. **Measured on an iPhone: true**
   /// (turning to your own left moves the nose toward the frame's left).

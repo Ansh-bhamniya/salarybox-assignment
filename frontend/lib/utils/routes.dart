@@ -6,6 +6,7 @@
 abstract final class Routes {
   // Before login
   static const splash = '/splash';
+  static const livenessDebug = '/liveness-debug';
   static const onboarding = '/onboarding';
   static const login = '/login';
 

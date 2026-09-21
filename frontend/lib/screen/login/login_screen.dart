@@ -11,6 +11,7 @@ import '../../config/theme/app_theme.dart';
 import '../../config/theme/app_icons.dart';
 import 'package:go_router/go_router.dart';
 import '../../utils/routes.dart';
+import '../../config/env.dart';
 import '../../widgets/app_back_button.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -140,6 +141,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         _DemoChip(icon: AppIcons.idBadge, label: 'Staff password', onPressed: _fillStaffPassword),
                       ],
                     ),
+                    if (Env.livenessDebug) ...[
+                      const SizedBox(height: AppSpacing.s),
+                      TextButton.icon(
+                        onPressed: () => context.push(Routes.livenessDebug),
+                        icon: const Icon(AppIcons.face),
+                        label: const Text('Liveness debug'),
+                      ),
+                    ],
                   ],
                 ),
               ),
