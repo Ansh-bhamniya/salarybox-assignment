@@ -15,7 +15,7 @@ enum FaceFraming {
   tooClose,
   offCenter;
 
-  /// Same limits the live guidance uses (see `FaceGuidanceAnalyzer`).
+  /// How well the face sits in the framing oval: not too small or big, near the middle.
   static FaceFraming of(Rect box, Size frame) {
     final widthRatio = box.width / frame.width;
     final centerX = box.center.dx / frame.width;

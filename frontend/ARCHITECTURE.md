@@ -40,17 +40,19 @@ frontend/
 │   │   ├── onboarding/            # first-run intro: 3 swipeable pages, shown once
 │   │   ├── login/                 # login_screen.dart
 │   │   ├── staff_home/            # staff_home_screen.dart (+ staff_home_widgets.dart)
-│   │   ├── mark_attendance/       # camera check-in
+│   │   ├── mark_attendance/       # head-turn check, then check-in (a failed check can be retried; three in a row lock the screen)
 │   │   ├── face_enrolment/        # admin: 3 auto-captured photos, review, save (re-enrol asks a reason; a duplicate-face warning can be overridden)
 │   │   ├── staff_list/  add_staff/  staff_profile/      # admin screens
 │   │
 │   ├── services/                  # one file per domain — it owns everything about that domain
 │   │   ├── auth_service.dart          # log in, keep/restore the session, log out
 │   │   ├── staff_service.dart         # list, create, profile, enrol faces (several photos at once), attendance history
-│   │   ├── attendance_service.dart    # record a check-in
+│   │   ├── attendance_service.dart    # record a check-in (with what the head-turn check saw); report failed checks
 │   │   ├── face_embedding_service.dart    # ML Kit detection + bundled TFLite model + matching
 │   │   ├── camera_capture_controller.dart # front camera: open, stream, capture
-│   │   └── face_guidance.dart         # live framing hints from the camera stream
+│   │   ├── camera_input_image.dart        # camera frame -> ML Kit input, and the upright frame size (iOS vs Android)
+│   │   ├── camera_frame_converter.dart    # a kept frame -> upright picture, and the model's face crop
+│   │   └── liveness/                      # the head-turn check and the guided camera (see below)
 │   │
 │   ├── utils/                     # infrastructure and helpers the services build on
 │   │   ├── http/                  # api_client (dio + interceptors), api_exception
@@ -62,7 +64,8 @@ frontend/
 │   └── widgets/                   # reusable UI, used by more than one screen
 │       ├── primary_button  loading_overlay  error_view  status_chip  content_width
 │       ├── staff_avatar  theme_toggle  app_back_button  app_fab  step_progress
-│       └── face_camera_view  camera_status_view          # the shared selfie-camera UI
+│       ├── pose_camera_view  turn_meter  face_oval_mask  cover_camera_preview   # the guided selfie camera
+│       └── camera_status_view
 │
 ├── assets/images/onboarding_{1,2,3}.png # intro illustrations, shown as supplied (the intro is always light)
 ├── assets/models/mobilefacenet.tflite   # bundled face-embedding model (see README beside it)
@@ -84,9 +87,10 @@ example, logs in, saves and restores the session, and logs out.
 Split further only when responsibilities become different enough that
 separating them makes the code easier to understand, test and maintain — not
 to have "one class per layer". Where that has been true:
-`FaceGuidanceAnalyzer` (analysing camera frames) is separate from
-`FaceCameraView` (drawing), and the camera plumbing is separate from face
-embedding. If a class only forwards to another, merge them.
+`LivenessAnalyzer` (analysing camera frames) is separate from
+`PoseCameraView` (drawing), the decisions are pure classes with no camera in
+them (`LivenessSession`, `EnrolmentPoseGuide`), and the camera plumbing is
+separate from face embedding. If a class only forwards to another, merge them.
 
 Services are tested by faking the network with a dio adapter
 (`test/helpers/fake_http_adapter.dart`) — no server needed.
@@ -162,6 +166,29 @@ users are kept off `/onboarding`.
 Measured on an iPhone: the stream arrives mirrored, and face boxes are relative to
 the upright 720×1280 frame (Android hands over the sideways sensor buffer, so its
 width and height swap: `services/camera_input_image.dart`).
+
+## Attendance
+
+Marking attendance is a head-turn check, not a shutter (`MarkAttendanceCubit`).
+Each attempt gets a fresh random challenge (turn one way, then the other, then
+look straight). Every analysed frame goes to a `LivenessSession`, which says when
+to keep one: at the start, at the best moment of each turn, and through the final
+hold, whose last few frames are remembered. `LivenessCoach` turns the session into
+what the person sees (prompt, turn line, ring, message) through the same guided
+camera enrolment uses.
+
+When the check passes, the kept frames are cut out of the live picture
+(`camera_frame_converter.dart`: rotate a sideways Android buffer, flip a mirrored
+stream back) and embedded. The last frames are averaged (one video frame is
+noisier than a still), and `evaluateLivenessIdentity` applies the rule: that
+average must match the person's enrolled faces, and the frames from before and
+during the turns must be the same face as it — so whoever did the turns is who is
+recorded. Then location and time are captured and the record is uploaded with the
+last frame as the photo and a summary of what the check saw.
+
+A failed check is reported to the backend and can be retried; three in a row lock
+the screen ("ask your admin"). Network and location trouble start a fresh check
+without counting. A watchdog fails the check if the camera stops delivering frames.
 
 ## Matching
 
