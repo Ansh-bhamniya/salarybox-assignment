@@ -43,14 +43,16 @@ class FaceEmbeddingService {
   /// EXIF, and ML Kit only finds faces that are (roughly) upright.
   static const _fallbackRotations = [90, 270, 180];
 
-  Future<FaceSample> generateEmbedding(String imagePath) async {
+  /// [maxYawDegrees] is how far round the head may be before the photo is refused;
+  /// straight-on photos use the default, deliberately turned ones allow more.
+  Future<FaceSample> generateEmbedding(String imagePath, {double maxYawDegrees = _maxYawDegrees}) async {
     var prepared = await _prepareImage(imagePath);
-    var faces = await _detect(prepared);
+    var faces = await _detect(prepared.path);
 
     if (faces.isEmpty) {
       for (final degrees in _fallbackRotations) {
         final rotated = await _prepareImage(imagePath, rotateDegrees: degrees);
-        final rotatedFaces = await _detect(rotated);
+        final rotatedFaces = await _detect(rotated.path);
         if (rotatedFaces.isNotEmpty) {
           prepared = rotated;
           faces = rotatedFaces;
@@ -69,12 +71,24 @@ class FaceEmbeddingService {
     }
 
     final face = faces.single;
-    if ((face.headEulerAngleY ?? 0).abs() > _maxYawDegrees) {
-      throw FaceProcessingException('Please face the camera directly, without turning your head.');
+    if ((face.headEulerAngleY ?? 0).abs() > maxYawDegrees) {
+      throw FaceProcessingException(
+        maxYawDegrees > _maxYawDegrees
+            ? 'You turned a little too far. Turn back slightly.'
+            : 'Please face the camera directly, without turning your head.',
+      );
     }
 
-    final embedding = await _embed(prepared, face.boundingBox);
-    return FaceSample(embedding: embedding, imagePath: prepared);
+    final embedding = await _embed(prepared.path, face.boundingBox);
+    final box = face.boundingBox;
+    return FaceSample(
+      embedding: embedding,
+      imagePath: prepared.path,
+      yawDegrees: face.headEulerAngleY,
+      faceCenterX: box.center.dx / prepared.width,
+      faceCenterY: box.center.dy / prepared.height,
+      faceWidthRatio: box.width / prepared.width,
+    );
   }
 
   Future<List<Face>> _detect(String path) async {
@@ -143,13 +157,13 @@ class FaceEmbeddingService {
   /// Decodes the photo, applies its EXIF orientation to the actual pixels,
   /// optionally rotates it, downsizes it and writes a fresh JPEG. Runs off
   /// the UI isolate because decoding/encoding a photo is CPU heavy.
-  Future<String> _prepareImage(String sourcePath, {int rotateDegrees = 0}) async {
+  Future<({String path, int width, int height})> _prepareImage(String sourcePath, {int rotateDegrees = 0}) async {
     final dir = await getTemporaryDirectory();
     final outPath = '${dir.path}/face_${DateTime.now().microsecondsSinceEpoch}_$rotateDegrees.jpg';
 
-    final ok = await Isolate.run(() {
+    final size = await Isolate.run(() {
       final decoded = img.decodeImage(File(sourcePath).readAsBytesSync());
-      if (decoded == null) return false;
+      if (decoded == null) return null;
 
       var image = img.bakeOrientation(decoded);
       if (rotateDegrees != 0) image = img.copyRotate(image, angle: rotateDegrees);
@@ -159,13 +173,13 @@ class FaceEmbeddingService {
             : img.copyResize(image, height: _maxImageSide);
       }
       File(outPath).writeAsBytesSync(img.encodeJpg(image, quality: 90));
-      return true;
+      return (width: image.width, height: image.height);
     });
 
-    if (!ok) {
+    if (size == null) {
       throw FaceProcessingException('Could not read the photo. Please retake it.');
     }
-    return outPath;
+    return (path: outPath, width: size.width, height: size.height);
   }
 
   FaceMatchResult compare(List<double> enrolled, List<double> fresh) => compareToAny([enrolled], fresh);

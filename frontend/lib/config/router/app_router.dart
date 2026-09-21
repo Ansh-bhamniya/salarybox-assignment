@@ -59,7 +59,10 @@ GoRouter buildRouter() {
       return null;
     },
     routes: [
-      GoRoute(path: Routes.splash, builder: (context, state) => SplashScreen(onFinished: () => splashDone.value = true)),
+      GoRoute(
+        path: Routes.splash,
+        builder: (context, state) => SplashScreen(onFinished: () => splashDone.value = true),
+      ),
       GoRoute(path: Routes.onboarding, builder: (context, state) => const OnboardingScreen()),
       GoRoute(path: Routes.login, builder: (context, state) => const LoginScreen()),
       // Admin. Listed most specific first: '/staff/add' must win over '/staff/:id'.
@@ -74,6 +77,7 @@ GoRouter buildRouter() {
         builder: (context, state) => FaceEnrolmentScreen(
           staffId: state.pathParameters[Routes.idParam]!,
           staffName: (state.extra as String?) ?? '',
+          isReEnrol: state.uri.queryParameters[Routes.reEnrolParam] == 'true',
         ),
       ),
       // Staff land on their profile; the camera is a page pushed from it.

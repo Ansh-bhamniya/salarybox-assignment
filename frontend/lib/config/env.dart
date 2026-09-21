@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// App-wide config that would normally vary per build flavor.
 ///
 /// [apiBaseUrl] defaults to the deployed Vercel backend, so a plain
@@ -8,13 +10,37 @@
 class Env {
   Env._();
 
-  static const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'https://salarybox-backend.vercel.app');
+  static const apiBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://salarybox-backend.vercel.app',
+  );
+
+  /// Whether the live camera stream arrives mirrored, the way a mirror shows it,
+  /// which flips which way a head turn reads. **Measured on an iPhone: true**
+  /// (turning to your own left moves the nose toward the frame's left).
+  /// Android is assumed false and still needs checking with the liveness debug
+  /// screen. Override with `--dart-define=LIVENESS_FRAMES_MIRRORED=true|false`.
+  static bool get livenessFramesMirrored => switch (const String.fromEnvironment('LIVENESS_FRAMES_MIRRORED')) {
+    'true' => true,
+    'false' => false,
+    _ => defaultTargetPlatform == TargetPlatform.iOS,
+  };
 
   /// Identifies the bundled face model (`assets/models/mobilefacenet.tflite`) to
   /// the backend, which stores it with every enrolment so faces made by
   /// different models are never compared. Change it whenever the model file
   /// changes.
   static const faceModelVersion = 'mobilefacenet-192-v1';
+
+  /// How many photos an enrolment takes (front, slightly left, slightly right).
+  /// The person is matched against all of them, and the best score counts.
+  static const enrolmentShots = 3;
+
+  /// Sanity check between the photos of one enrolment: a later photo that
+  /// scores below this against the first is probably a different person or a
+  /// bad shot, and is retaken. Deliberately well under [faceMatchThreshold] so
+  /// natural head turns and lighting changes still pass.
+  static const enrolmentMinSimilarity = 0.4;
 
   /// Cosine-similarity threshold above which two face embeddings (from the
   /// bundled MobileFaceNet model) are considered the same person.

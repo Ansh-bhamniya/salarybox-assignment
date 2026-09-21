@@ -25,6 +25,11 @@ abstract final class Routes {
   /// The concrete path for one staff member's profile.
   static String staffProfileOf(String id) => '/staff/$id';
 
-  /// The concrete path for enrolling one staff member's face.
-  static String enrolOf(String id) => '/staff/$id/enroll';
+  /// The concrete path for enrolling one staff member's face. [reEnrol] marks
+  /// replacing an existing enrolment, which asks for a reason.
+  static String enrolOf(String id, {bool reEnrol = false}) =>
+      reEnrol ? '/staff/$id/enroll?$reEnrolParam=true' : '/staff/$id/enroll';
+
+  /// Query parameter that marks an enrolment as a re-enrolment.
+  static const reEnrolParam = 'reenrol';
 }

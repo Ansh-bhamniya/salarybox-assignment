@@ -1,7 +1,8 @@
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/camera_capture_controller.dart';
+import './cover_camera_preview.dart';
+import './face_oval_mask.dart';
 import '../services/face_guidance.dart';
 import '../config/theme/app_radius.dart';
 import '../config/theme/app_icons.dart';
@@ -76,7 +77,7 @@ class _FaceCameraViewState extends State<FaceCameraView> with WidgetsBindingObse
       child: Stack(
         fit: StackFit.expand,
         children: [
-          _CoverPreview(controller: controller),
+          CoverCameraPreview(controller: controller),
           ValueListenableBuilder<FaceGuidance>(
             valueListenable: _analyzer.guidance,
             builder: (context, guidance, _) {
@@ -85,7 +86,7 @@ class _FaceCameraViewState extends State<FaceCameraView> with WidgetsBindingObse
                 fit: StackFit.expand,
                 children: [
                   CustomPaint(
-                    painter: _OvalMaskPainter(
+                    painter: FaceOvalMaskPainter(
                       ringColor: good
                           ? Theme.of(context).colorScheme.primaryFixedDim
                           : Colors.white.withValues(alpha: 0.85),
@@ -110,67 +111,6 @@ class _FaceCameraViewState extends State<FaceCameraView> with WidgetsBindingObse
       ),
     );
   }
-}
-
-/// Fills the whole screen with the preview, cropping the overflow instead of
-/// letterboxing it (a raw [CameraPreview] keeps the sensor's aspect ratio and
-/// leaves black bars).
-class _CoverPreview extends StatelessWidget {
-  const _CoverPreview({required this.controller});
-
-  final CameraController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final previewSize = controller.value.previewSize;
-    if (previewSize == null) return const SizedBox.shrink();
-
-    // previewSize is reported in sensor (landscape) terms; the UI is locked
-    // to portrait, so the short side is the width.
-    final width = previewSize.width < previewSize.height ? previewSize.width : previewSize.height;
-    final height = previewSize.width < previewSize.height ? previewSize.height : previewSize.width;
-
-    return ClipRect(
-      child: FittedBox(
-        fit: BoxFit.cover,
-        child: SizedBox(width: width, height: height, child: CameraPreview(controller)),
-      ),
-    );
-  }
-}
-
-Rect _ovalRect(Size size) {
-  final width = size.width * 0.72;
-  final height = width * 1.3;
-  return Rect.fromCenter(center: Offset(size.width / 2, size.height * 0.44), width: width, height: height);
-}
-
-class _OvalMaskPainter extends CustomPainter {
-  const _OvalMaskPainter({required this.ringColor});
-
-  final Color ringColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final oval = _ovalRect(size);
-
-    final scrim = Path()
-      ..fillType = PathFillType.evenOdd
-      ..addRect(Offset.zero & size)
-      ..addOval(oval);
-    canvas.drawPath(scrim, Paint()..color = Colors.black.withValues(alpha: 0.55));
-
-    canvas.drawOval(
-      oval,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..color = ringColor,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_OvalMaskPainter oldDelegate) => oldDelegate.ringColor != ringColor;
 }
 
 class _GuidancePill extends StatelessWidget {

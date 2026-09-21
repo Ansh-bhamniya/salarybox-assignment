@@ -7,6 +7,7 @@ void main() {
   test('concrete paths fit their patterns', () {
     expect(Routes.staffProfileOf('7'), '/staff/7');
     expect(Routes.enrolOf('7'), '/staff/7/enroll');
+    expect(Routes.enrolOf('7', reEnrol: true), '/staff/7/enroll?reenrol=true');
     expect(Routes.staffProfile, '/staff/:id');
     expect(Routes.enrol, '/staff/:id/enroll');
   });

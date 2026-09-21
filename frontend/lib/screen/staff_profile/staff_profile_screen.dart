@@ -95,7 +95,8 @@ class _StaffProfileView extends StatelessWidget {
                                     ? FilledButton.icon(
                                         icon: const Icon(AppIcons.refresh),
                                         label: const Text('Re-enrol face'),
-                                        onPressed: () => context.push(Routes.enrolOf(staffId), extra: staff.name),
+                                        onPressed: () =>
+                                            context.push(Routes.enrolOf(staffId, reEnrol: true), extra: staff.name),
                                       )
                                     : FilledButton.icon(
                                         icon: const Icon(AppIcons.face),

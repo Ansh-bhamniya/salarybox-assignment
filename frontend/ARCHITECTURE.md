@@ -41,12 +41,12 @@ frontend/
 │   │   ├── login/                 # login_screen.dart
 │   │   ├── staff_home/            # staff_home_screen.dart (+ staff_home_widgets.dart)
 │   │   ├── mark_attendance/       # camera check-in
-│   │   ├── face_enrolment/        # admin: capture + save a face
+│   │   ├── face_enrolment/        # admin: 3 auto-captured photos, review, save (re-enrol asks a reason; a duplicate-face warning can be overridden)
 │   │   ├── staff_list/  add_staff/  staff_profile/      # admin screens
 │   │
 │   ├── services/                  # one file per domain — it owns everything about that domain
 │   │   ├── auth_service.dart          # log in, keep/restore the session, log out
-│   │   ├── staff_service.dart         # list, create, profile, enrol a face, attendance history
+│   │   ├── staff_service.dart         # list, create, profile, enrol faces (several photos at once), attendance history
 │   │   ├── attendance_service.dart    # record a check-in
 │   │   ├── face_embedding_service.dart    # ML Kit detection + bundled TFLite model + matching
 │   │   ├── camera_capture_controller.dart # front camera: open, stream, capture
@@ -171,6 +171,24 @@ compareToAny`). Templates from another model version are ignored, and a person
 who only has those is told to ask their admin to re-enrol them. `Staff` carries all
 of a person's active templates, and backend errors carry an optional `code` and
 `details` (`ApiException`).
+
+## Enrolment
+
+Nobody presses a shutter. The live stream is analysed and `EnrolmentPoseGuide`
+decides when each of the three photos (straight, a little to the left, a little to
+the right) is taken: the face in the oval and the pose held steady for 1.5 s
+(straight) or 1.2 s (turned), with a short "Photo saved" pause between photos.
+`PoseCameraView` shows the oval (a ring fills while holding), the prompt, a turn
+line (`TurnMeter`: a bar grows from the middle toward the side the head is turned
+to, the green zone is where this photo is taken from) and a one-line message.
+
+`FaceCaptureCubit` takes the photo when told to, checks it again (head angle, and
+that the face is inside the oval) and retakes by itself if the person had moved,
+then checks each later photo against the first (`Env.enrolmentMinSimilarity`).
+`FaceEnrolmentCubit` uploads them together; if the backend answers
+`duplicate_face` the screen shows who the face resembles and lets the admin enrol
+anyway with a reason. Re-enrolling (`Routes.enrolOf(id, reEnrol: true)`) asks for
+a reason first.
 
 ## Networking
 

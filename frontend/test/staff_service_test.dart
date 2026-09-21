@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/services/staff_service.dart';
+import 'package:frontend/models/face_match_result.dart';
+import 'package:frontend/models/duplicate_match.dart';
 import 'package:frontend/utils/http/api_client.dart';
 import 'package:frontend/utils/http/api_exception.dart';
 import 'helpers/fake_http_adapter.dart';
@@ -53,21 +55,75 @@ void main() {
     expect(staff.id, '1');
   });
 
-  test('enroll() uploads the photo and the embedding as multipart', () async {
+  test('enroll() uploads every photo and all embeddings as one multipart request', () async {
     adapter.body = _enrolled;
     final dir = Directory.systemTemp.createTempSync('staff_test');
     addTearDown(() => dir.deleteSync(recursive: true));
-    final photo = File('${dir.path}/face.jpg')..writeAsBytesSync([0xFF, 0xD8, 0xFF, 0xD9]);
+    File photo(String name) => File('${dir.path}/$name')..writeAsBytesSync([0xFF, 0xD8, 0xFF, 0xD9]);
 
-    final staff = await service.enroll(id: '1', photoPath: photo.path, embedding: [0.5, 0.25]);
+    final staff = await service.enroll(
+      id: '1',
+      shots: [
+        FaceSample(embedding: [0.5, 0.25], imagePath: photo('a.jpg').path),
+        FaceSample(embedding: [0.25, 0.5], imagePath: photo('b.jpg').path),
+      ],
+    );
 
     expect(adapter.request.path, '/staff/1/enroll');
     final form = adapter.request.data as FormData;
-    expect(form.fields.firstWhere((f) => f.key == 'embedding').value, '[0.5,0.25]');
+    expect(form.fields.firstWhere((f) => f.key == 'embeddings').value, '[[0.5,0.25],[0.25,0.5]]');
     expect(form.fields.firstWhere((f) => f.key == 'modelVersion').value, 'mobilefacenet-192-v1');
-    expect(form.files.single.key, 'photo');
-    expect(form.files.single.value.filename, 'enrollment.jpg');
+    expect(form.fields.any((f) => f.key == 'reason'), isFalse);
+    expect(form.fields.any((f) => f.key == 'allowDuplicate'), isFalse);
+    expect(form.files.map((f) => f.key), ['photos', 'photos']);
+    expect(form.files.map((f) => f.value.filename), ['enrollment_0.jpg', 'enrollment_1.jpg']);
     expect(staff.isEnrolled, isTrue);
+  });
+
+  test('enroll() sends the reason and the duplicate override when given', () async {
+    adapter.body = _enrolled;
+    final dir = Directory.systemTemp.createTempSync('staff_test');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final photo = File('${dir.path}/a.jpg')..writeAsBytesSync([0xFF, 0xD8, 0xFF, 0xD9]);
+
+    await service.enroll(
+      id: '1',
+      shots: [
+        FaceSample(embedding: [1.0], imagePath: photo.path),
+      ],
+      reason: 'Appearance changed',
+      allowDuplicate: true,
+    );
+
+    final form = adapter.request.data as FormData;
+    expect(form.fields.firstWhere((f) => f.key == 'reason').value, 'Appearance changed');
+    expect(form.fields.firstWhere((f) => f.key == 'allowDuplicate').value, 'true');
+  });
+
+  test('enroll() surfaces the backend error code and details', () async {
+    adapter
+      ..status = 409
+      ..body =
+          '{"error":"This face looks like an already enrolled staff member","code":"duplicate_face",'
+          '"details":{"matches":[{"staffId":"9","employeeId":"E-9","name":"Ravi","similarity":0.83}]}}';
+    final dir = Directory.systemTemp.createTempSync('staff_test');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final photo = File('${dir.path}/a.jpg')..writeAsBytesSync([0xFF, 0xD8, 0xFF, 0xD9]);
+
+    await expectLater(
+      service.enroll(
+        id: '1',
+        shots: [
+          FaceSample(embedding: [1.0], imagePath: photo.path),
+        ],
+      ),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', 409)
+            .having((e) => e.code, 'code', 'duplicate_face')
+            .having((e) => DuplicateMatch.listFrom(e.details).single.name, 'match name', 'Ravi'),
+      ),
+    );
   });
 
   test('attendanceHistory() maps the records', () async {

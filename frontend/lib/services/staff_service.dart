@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../models/attendance_record.dart';
+import '../models/face_match_result.dart';
 import '../models/staff.dart';
 import '../utils/http/api_client.dart';
 import '../config/env.dart';
@@ -34,12 +35,25 @@ class StaffService {
     });
   }
 
-  Future<Staff> enroll({required String id, required String photoPath, required List<double> embedding}) {
+  /// Enrols (or re-enrols) a person from several captures at once. Throws an
+  /// [ApiException] with code `duplicate_face` if the face already belongs to
+  /// another staff member, unless [allowDuplicate] is set (which needs a [reason]).
+  Future<Staff> enroll({
+    required String id,
+    required List<FaceSample> shots,
+    String? reason,
+    bool allowDuplicate = false,
+  }) {
     return runApiCall(() async {
       final formData = FormData.fromMap({
-        'embedding': jsonEncode(embedding),
+        'embeddings': jsonEncode([for (final shot in shots) shot.embedding]),
         'modelVersion': Env.faceModelVersion,
-        'photo': await MultipartFile.fromFile(photoPath, filename: 'enrollment.jpg'),
+        'reason': ?reason,
+        if (allowDuplicate) 'allowDuplicate': 'true',
+        'photos': [
+          for (var i = 0; i < shots.length; i++)
+            await MultipartFile.fromFile(shots[i].imagePath, filename: 'enrollment_$i.jpg'),
+        ],
       });
       final response = await _client.dio.post('/staff/$id/enroll', data: formData);
       return Staff.fromJson(response.data as Map<String, dynamic>);
