@@ -364,7 +364,7 @@ void main() {
       expect(frames * 100, lessThan(1700));
     });
 
-    test('a turn photo needs about 1.2 seconds in the zone', () {
+    test('a turn photo is held as long as the first one, not faster', () {
       final feed = _Feed(guide());
       feed.acceptStraight();
       feed.pastSavedPause();
@@ -372,8 +372,8 @@ void main() {
       while (!feed.frame(yaw: 20, ratio: 0.25).shouldCapture && frames < 60) {
         frames++;
       }
-      expect(frames * 100, greaterThanOrEqualTo(1100));
-      expect(frames * 100, lessThan(1400));
+      expect(frames * 100, greaterThanOrEqualTo(1400));
+      expect(frames * 100, lessThan(1700));
     });
 
     test('a face box that keeps drifting across the frame is not still', () {
@@ -410,6 +410,53 @@ void main() {
       for (var i = 0; i < 9; i++) {
         expect(feed.frame(yaw: 20, ratio: 0.25).shouldCapture, isFalse);
       }
+    });
+  });
+
+  group('the ring is split into one piece per photo', () {
+    test('three pieces, none done at the start, and the hold fills only the current piece', () {
+      final feed = _Feed(guide());
+      final g = feed.frame();
+      expect(g.ringSegments, 3);
+      expect(g.ringDone, 0);
+
+      final mid = feed.settle();
+      expect(mid.ringDone, 0);
+      expect(mid.ringProgress, greaterThan(0));
+      expect(mid.ringProgress, lessThan(1));
+    });
+
+    test('a kept photo leaves its piece filled while the next one starts empty', () {
+      final feed = _Feed(guide());
+      feed.acceptStraight();
+      final saved = feed.frame();
+      expect(saved.ringDone, 1);
+      expect(saved.ringProgress, 0);
+
+      feed.pastSavedPause();
+      final turning = feed.frame(yaw: 20, ratio: 0.25);
+      expect(turning.ringSegments, 3);
+      expect(turning.ringDone, 1);
+    });
+
+    test('a rejected photo does not fill its piece', () {
+      final feed = _Feed(guide());
+      feed.holdUntilCapture();
+      feed.guide.shotRejected();
+      expect(feed.frame().ringDone, 0);
+    });
+
+    test('all pieces are done once every photo is kept', () {
+      final feed = _Feed(guide());
+      feed.acceptStraight();
+      feed.pastSavedPause();
+      feed.holdUntilCapture(yaw: 20, ratio: 0.25);
+      feed.guide.shotAccepted();
+      feed.pastSavedPause();
+      feed.holdUntilCapture(yaw: -20, ratio: -0.25);
+      feed.guide.shotAccepted();
+
+      expect(feed.frame(yaw: -20, ratio: -0.25).ringDone, 3);
     });
   });
 

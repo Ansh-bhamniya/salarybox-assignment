@@ -263,6 +263,41 @@ void main() {
     });
   });
 
+  group('the ring is split into one piece per step', () {
+    test('first hold, one piece per turn, and the last hold', () {
+      final run = leftRight();
+      expect(run.coach.idle().ringSegments, 4);
+      expect(run.frame().ringDone, 0);
+
+      run.ready();
+      final turning = run.frame();
+      expect(turning.ringSegments, 4);
+      expect(turning.ringDone, 1, reason: 'the first hold is done');
+
+      run.settle(yaw: 20, ratio: 0.25, frames: 3);
+      expect(run.frame(yaw: 3, ratio: 0).ringDone, 2, reason: 'one turn done');
+
+      run.settle(yaw: 20, ratio: -0.25, frames: 3);
+      expect(run.frame().ringDone, 3, reason: 'both turns done, the last hold is next');
+    });
+
+    test('all pieces are filled once passed, and none after a failure', () {
+      final run = leftRight()..ready();
+      final failed = run.frame(yaw: 20, ratio: -0.25);
+      expect(failed.phase, LivenessPhase.failed);
+      expect(failed.ringDone, 0);
+
+      final done = leftRight();
+      done.ready();
+      done.settle(yaw: 20, ratio: 0.25, frames: 3);
+      done.frame();
+      done.settle(yaw: 20, ratio: -0.25, frames: 3);
+      final passed = done.settle(frames: 12);
+      expect(passed.phase, LivenessPhase.passed);
+      expect(passed.ringDone, passed.ringSegments);
+    });
+  });
+
   group('the failure messages', () {
     test('every failure has its own plain-words message', () {
       final messages = {for (final f in LivenessFailure.values) f: LivenessCoach.messageForFailure(f)};

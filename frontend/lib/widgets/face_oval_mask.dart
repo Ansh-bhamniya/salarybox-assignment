@@ -9,15 +9,29 @@ Rect faceOvalRect(Size size) {
 }
 
 /// Darkens everything outside the framing oval and outlines it in [ringColor].
-/// Shared by every screen that asks for a face in the oval. With a [progress]
-/// above zero an arc in [progressColor] fills the ring clockwise from the top
-/// (used to show how much of a hold is done).
+/// Shared by every screen that asks for a face in the oval.
+///
+/// The ring can show progress: it is split into [segments] equal pieces (one per
+/// step, with small gaps), the first [segmentsDone] are filled in [progressColor],
+/// and [progress] (0..1) fills the next piece clockwise from where it starts.
+/// The first piece starts at the top. With one segment the whole ring is one piece.
 class FaceOvalMaskPainter extends CustomPainter {
-  const FaceOvalMaskPainter({required this.ringColor, this.progress = 0, this.progressColor = Colors.white});
+  const FaceOvalMaskPainter({
+    required this.ringColor,
+    this.progress = 0,
+    this.progressColor = Colors.white,
+    this.segments = 1,
+    this.segmentsDone = 0,
+  }) : assert(segments >= 1);
 
   final Color ringColor;
   final double progress;
   final Color progressColor;
+  final int segments;
+  final int segmentsDone;
+
+  /// The empty space left between two pieces of a split ring, in radians.
+  static const gap = 0.16;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -37,16 +51,32 @@ class FaceOvalMaskPainter extends CustomPainter {
         ..color = ringColor,
     );
 
-    if (progress > 0) {
-      final arc = Path()..arcTo(oval, -pi / 2, 2 * pi * progress.clamp(0.0, 1.0), true);
-      canvas.drawPath(
-        arc,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 7
-          ..strokeCap = StrokeCap.round
-          ..color = progressColor,
-      );
+    final fill = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 7
+      ..strokeCap = StrokeCap.round
+      ..color = progressColor;
+
+    if (segments == 1) {
+      final amount = segmentsDone >= 1 ? 1.0 : progress.clamp(0.0, 1.0);
+      if (amount > 0) canvas.drawPath(Path()..arcTo(oval, -pi / 2, 2 * pi * amount, true), fill);
+      return;
+    }
+
+    // Split ring: an empty track for every piece, then what is done on top of it.
+    final track = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 7
+      ..strokeCap = StrokeCap.round
+      ..color = Colors.white.withValues(alpha: 0.3);
+    final piece = 2 * pi / segments;
+    for (var i = 0; i < segments; i++) {
+      final start = -pi / 2 + i * piece + gap / 2;
+      final length = piece - gap;
+      canvas.drawPath(Path()..arcTo(oval, start, length, true), track);
+
+      final amount = i < segmentsDone ? 1.0 : (i == segmentsDone ? progress.clamp(0.0, 1.0) : 0.0);
+      if (amount > 0) canvas.drawPath(Path()..arcTo(oval, start, length * amount, true), fill);
     }
   }
 
@@ -54,5 +84,7 @@ class FaceOvalMaskPainter extends CustomPainter {
   bool shouldRepaint(FaceOvalMaskPainter oldDelegate) =>
       oldDelegate.ringColor != ringColor ||
       oldDelegate.progress != progress ||
-      oldDelegate.progressColor != progressColor;
+      oldDelegate.progressColor != progressColor ||
+      oldDelegate.segments != segments ||
+      oldDelegate.segmentsDone != segmentsDone;
 }

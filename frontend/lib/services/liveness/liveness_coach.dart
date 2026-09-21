@@ -18,6 +18,8 @@ class LivenessGuidance implements CameraCoaching {
     this.saved = false,
     this.capturing = false,
     this.turnDegrees,
+    this.ringSegments = 1,
+    this.ringDone = 0,
     this.ringProgress = 0,
   });
 
@@ -45,6 +47,10 @@ class LivenessGuidance implements CameraCoaching {
   final double targetMin;
   @override
   final double targetMax;
+  @override
+  final int ringSegments;
+  @override
+  final int ringDone;
   @override
   final double ringProgress;
 }
@@ -189,6 +195,8 @@ class LivenessCoach {
       turnDegrees: turn,
       targetMin: left ? zone.min : -zone.max,
       targetMax: left ? zone.max : -zone.min,
+      ringSegments: _ringSegments,
+      ringDone: _ringDone,
     );
   }
 
@@ -215,9 +223,21 @@ class LivenessCoach {
       turnDegrees: turn,
       targetMin: -_config.neutralYawDegrees,
       targetMax: _config.neutralYawDegrees,
+      ringSegments: _ringSegments,
+      ringDone: _ringDone,
       ringProgress: session.holdProgress,
     );
   }
+
+  /// One piece of the ring for the first hold, one per turn, and one for the last hold.
+  int get _ringSegments => session.totalTurns + 2;
+
+  int get _ringDone => switch (session.phase) {
+    LivenessPhase.waitingForFace || LivenessPhase.holdStill || LivenessPhase.failed => 0,
+    LivenessPhase.turning => 1 + session.turnsCompleted,
+    LivenessPhase.lookStraight => 1 + session.totalTurns,
+    LivenessPhase.passed => _ringSegments,
+  };
 
   /// Straight against the person's own baseline (known once the hold has finished).
   bool _isStraight(FaceObservation o) {

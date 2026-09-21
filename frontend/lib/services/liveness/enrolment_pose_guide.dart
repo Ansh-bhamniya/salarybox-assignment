@@ -47,7 +47,7 @@ class EnrolmentPoseConfig {
     this.wrongWayDegrees = 6,
     this.maxTrustedYawDegrees = 55,
     this.holdStraightFor = const Duration(milliseconds: 1500),
-    this.holdTurnFor = const Duration(milliseconds: 1200),
+    this.holdTurnFor = const Duration(milliseconds: 1500),
     this.holdGrace = const Duration(milliseconds: 150),
     this.savedFor = const Duration(milliseconds: 1000),
     this.steadyDegrees = 3,
@@ -131,6 +131,7 @@ class PoseGuidance implements CameraCoaching {
     required this.targetMin,
     required this.targetMax,
     this.turnDegrees,
+    this.photosDone = 0,
     this.holdProgress = 0,
     this.shouldCapture = false,
   });
@@ -158,6 +159,9 @@ class PoseGuidance implements CameraCoaching {
   final double targetMin;
   @override
   final double targetMax;
+
+  /// How many photos have been taken and kept so far.
+  final int photosDone;
 
   /// 0..1: how much of the hold is done.
   final double holdProgress;
@@ -188,6 +192,13 @@ class PoseGuidance implements CameraCoaching {
 
   @override
   bool get capturing => shouldCapture;
+
+  /// One piece of the ring per photo (per direction): finished photos stay filled.
+  @override
+  int get ringSegments => totalShots;
+
+  @override
+  int get ringDone => photosDone;
 
   @override
   double get ringProgress => inPosition ? holdProgress : 0;
@@ -491,6 +502,7 @@ class EnrolmentPoseGuide {
       turnDegrees: turn,
       targetMin: range.min,
       targetMax: range.max,
+      photosDone: min(_index, plan.length),
       holdProgress: progress,
       shouldCapture: capture,
     );

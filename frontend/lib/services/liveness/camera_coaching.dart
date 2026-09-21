@@ -33,6 +33,12 @@ abstract interface class CameraCoaching {
   double get targetMin;
   double get targetMax;
 
-  /// 0..1 of the hold that is done, drawn as an arc around the oval.
+  /// The ring around the oval is split into [ringSegments] pieces, one per step
+  /// (per photo, or per part of the head-turn check). The first [ringDone] are
+  /// complete, and [ringProgress] fills the next one.
+  int get ringSegments;
+  int get ringDone;
+
+  /// 0..1 of the hold that is done, drawn as the piece of the ring being filled.
   double get ringProgress;
 }

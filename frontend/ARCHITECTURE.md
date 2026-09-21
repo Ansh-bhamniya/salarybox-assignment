@@ -203,8 +203,9 @@ of a person's active templates, and backend errors carry an optional `code` and
 Nobody presses a shutter. The live stream is analysed and `EnrolmentPoseGuide`
 decides when each of the three photos (straight, a little to the left, a little to
 the right) is taken: the face in the oval and the pose held steady for 1.5 s
-(straight) or 1.2 s (turned), with a short "Photo saved" pause between photos.
-`PoseCameraView` shows the oval (a ring fills while holding), the prompt, a turn
+(the same for every photo), with a short "Photo saved" pause between photos.
+`PoseCameraView` shows the oval, with a ring split into one piece per photo (a
+piece fills while its photo is held and stays filled once it is kept), the prompt, a turn
 line (`TurnMeter`: a bar grows from the middle toward the side the head is turned
 to, the green zone is where this photo is taken from) and a one-line message.
 

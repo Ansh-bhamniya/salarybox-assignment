@@ -123,6 +123,8 @@ class _PoseCameraViewState extends State<PoseCameraView> with WidgetsBindingObse
                       ringColor: guidance.saved ? accent : Colors.white.withValues(alpha: 0.85),
                       progress: guidance.ringProgress,
                       progressColor: accent,
+                      segments: guidance.ringSegments,
+                      segmentsDone: guidance.ringDone,
                     ),
                   ),
                   SafeArea(
