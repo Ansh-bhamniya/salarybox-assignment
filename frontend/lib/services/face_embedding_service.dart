@@ -9,6 +9,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import '../config/env.dart';
 import '../models/face_match_result.dart';
+import './camera_frame_converter.dart';
+import './face_similarity.dart';
+import './liveness/camera_frame.dart';
 
 /// Turns a selfie into a 192-number face "embedding" and compares two
 /// embeddings for a match. Everything runs on-device.
@@ -24,12 +27,8 @@ class FaceEmbeddingService {
   Future<Interpreter>? _interpreterFuture;
 
   static const _modelAsset = 'assets/models/mobilefacenet.tflite';
-  static const _inputSize = 112;
+  static const _inputSize = faceInputSize;
   static const _embeddingLength = 192;
-
-  /// The crop is the detected face box, made square and this much larger so
-  /// the model sees a little forehead/chin context like its training crops.
-  static const _cropMargin = 1.2;
 
   /// Beyond this head turn (degrees) embeddings stop being reliable.
   static const _maxYawDegrees = 25.0;
@@ -109,7 +108,27 @@ class FaceEmbeddingService {
   Future<List<double>> _embed(String imagePath, Rect box) async {
     final left = box.left, top = box.top, width = box.width, height = box.height;
     final input = await Isolate.run(() => _buildInputTensor(imagePath, left, top, width, height));
+    return _embedTensor(input);
+  }
 
+  /// The face in one frame of the live camera stream, embedded the same way as a
+  /// photo. [faceBox] is where ML Kit found the face on that frame, and
+  /// [framesMirrored] says whether the device's stream is mirrored (the frame is
+  /// then flipped back, so it faces the same way as the enrolment photos). The
+  /// whole upright picture is saved to [saveJpegTo] if given, for use as the
+  /// attendance photo; otherwise the sample has no image path.
+  Future<FaceSample> embedFrame(
+    CameraFrame frame,
+    Rect faceBox, {
+    required bool framesMirrored,
+    String? saveJpegTo,
+  }) async {
+    final crop = await cropFrameForEmbedding(frame, faceBox, mirrored: framesMirrored, saveJpegTo: saveJpegTo);
+    final embedding = await _embedTensor(crop.tensor);
+    return FaceSample(embedding: embedding, imagePath: crop.jpegPath ?? '');
+  }
+
+  Future<List<double>> _embedTensor(Float32List input) async {
     final interpreter = await _loadInterpreter();
     final output = List.generate(1, (_) => List.filled(_embeddingLength, 0.0));
     interpreter.run(input.reshape([1, _inputSize, _inputSize, 3]), output);
@@ -129,29 +148,7 @@ class FaceEmbeddingService {
   /// model was trained. Static so it can run in a background isolate.
   static Float32List _buildInputTensor(String path, double left, double top, double width, double height) {
     final image = img.decodeImage(File(path).readAsBytesSync())!;
-
-    final side = min((max(width, height) * _cropMargin).floor(), min(image.width, image.height));
-    final centerX = left + width / 2;
-    final centerY = top + height / 2;
-    final x = (centerX - side / 2).round().clamp(0, image.width - side);
-    final y = (centerY - side / 2).round().clamp(0, image.height - side);
-
-    final crop = img.copyCrop(image, x: x, y: y, width: side, height: side);
-    final resized = img.copyResize(
-      crop,
-      width: _inputSize,
-      height: _inputSize,
-      interpolation: img.Interpolation.linear,
-    );
-
-    final tensor = Float32List(_inputSize * _inputSize * 3);
-    var i = 0;
-    for (final pixel in resized) {
-      tensor[i++] = (pixel.r - 128) / 128;
-      tensor[i++] = (pixel.g - 128) / 128;
-      tensor[i++] = (pixel.b - 128) / 128;
-    }
-    return tensor;
+    return faceTensorFromImage(image, left, top, width, height);
   }
 
   /// Decodes the photo, applies its EXIF orientation to the actual pixels,
@@ -190,7 +187,7 @@ class FaceEmbeddingService {
   FaceMatchResult compareToAny(List<List<double>> enrolled, List<double> fresh) {
     var best = 0.0;
     for (var i = 0; i < enrolled.length; i++) {
-      final similarity = _cosineSimilarity(enrolled[i], fresh);
+      final similarity = cosineSimilarity(enrolled[i], fresh);
       if (i == 0 || similarity > best) best = similarity;
     }
     if (!kReleaseMode) {
@@ -199,21 +196,6 @@ class FaceEmbeddingService {
       );
     }
     return FaceMatchResult(isMatch: enrolled.isNotEmpty && best >= Env.faceMatchThreshold, similarity: best);
-  }
-
-  /// Different lengths (e.g. an enrolment made before this model existed)
-  /// score 0, so they can never match — the person just needs re-enrolling.
-  double _cosineSimilarity(List<double> a, List<double> b) {
-    if (a.length != b.length || a.isEmpty) return 0;
-
-    double dot = 0, normA = 0, normB = 0;
-    for (var i = 0; i < a.length; i++) {
-      dot += a[i] * b[i];
-      normA += a[i] * a[i];
-      normB += b[i] * b[i];
-    }
-    if (normA == 0 || normB == 0) return 0;
-    return dot / (sqrt(normA) * sqrt(normB));
   }
 
   Future<void> dispose() async {

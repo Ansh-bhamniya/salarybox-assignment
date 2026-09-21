@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show Rect;
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
@@ -19,6 +20,19 @@ class AnalyzerStats {
   /// The camera buffer's size as delivered (before any rotation).
   final int frameWidth;
   final int frameHeight;
+}
+
+/// One analysed frame: what it says ([observation]), the picture itself and where
+/// ML Kit found the face on it. [image] is only valid while it is being handled —
+/// the camera reuses its buffers — so copy it (`CameraFrame.fromCameraImage`) to keep it.
+class AnalyzedFrame {
+  const AnalyzedFrame({required this.observation, required this.image, this.faceBox});
+
+  final FaceObservation observation;
+  final CameraImage image;
+
+  /// The face's box in the upright picture, when exactly one face was found.
+  final Rect? faceBox;
 }
 
 /// Runs face detection on the live camera stream and publishes one
@@ -44,7 +58,7 @@ class LivenessAnalyzer {
   FaceDetector _detector;
 
   final Stopwatch _clock = Stopwatch()..start();
-  final StreamController<FaceObservation> _observations = StreamController.broadcast();
+  final StreamController<AnalyzedFrame> _frames = StreamController.broadcast();
   final ValueNotifier<AnalyzerStats> stats = ValueNotifier(const AnalyzerStats());
   final List<int> _completedAtMs = [];
 
@@ -52,7 +66,10 @@ class LivenessAnalyzer {
   bool _closed = false;
   int _frameIndex = 0;
 
-  Stream<FaceObservation> get observations => _observations.stream;
+  /// Every analysed frame with its picture, for whoever needs to keep some.
+  Stream<AnalyzedFrame> get frames => _frames.stream;
+
+  Stream<FaceObservation> get observations => _frames.stream.map((frame) => frame.observation);
   FaceDetectorMode get mode => _mode;
   bool get framesMirrored => _estimator.framesMirrored;
 
@@ -91,7 +108,13 @@ class LivenessAnalyzer {
         frameIndex: _frameIndex++,
       );
       _recordCompletion(startedMs, image);
-      _observations.add(observation);
+      _frames.add(
+        AnalyzedFrame(
+          observation: observation,
+          image: image,
+          faceBox: faces.length == 1 ? faces.single.boundingBox : null,
+        ),
+      );
     } catch (_) {
       // One bad frame is not worth surfacing.
     } finally {
@@ -113,7 +136,7 @@ class LivenessAnalyzer {
 
   Future<void> dispose() async {
     _closed = true;
-    await _observations.close();
+    await _frames.close();
     stats.dispose();
     await _detector.close();
   }
