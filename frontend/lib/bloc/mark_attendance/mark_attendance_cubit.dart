@@ -1,27 +1,46 @@
 import 'dart:async';
+import 'dart:math';
+import 'dart:ui' show Rect;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../config/env.dart';
 import '../../utils/http/api_exception.dart';
 import '../../services/camera_capture_controller.dart';
 import '../../services/face_embedding_service.dart';
+import '../../services/liveness/camera_frame.dart';
+import '../../services/liveness/face_observation.dart';
+import '../../services/liveness/liveness_analyzer.dart';
+import '../../services/liveness/liveness_coach.dart';
+import '../../services/liveness/liveness_identity.dart';
+import '../../services/liveness/liveness_session.dart';
 import '../../models/face_match_result.dart';
 import '../../services/staff_service.dart';
 import '../../services/attendance_service.dart';
 import './mark_attendance_state.dart';
 
-/// Drives the whole "tap Mark Attendance" flow: capture selfie → detect and
-/// embed the face → compare against the staff member's own enrolled
-/// embedding (fetched fresh from the backend, not cached from login, so a
-/// re-enrolment takes effect immediately) → on match, capture location and
-/// upload. Nothing is recorded unless the face matches — enforced here
-/// client-side and, independently, the backend never re-derives a match on
-/// its own, so this cubit is the only place that decision gets made.
+/// Where the phone is, as the attendance record needs it.
+typedef Locator = Future<({double latitude, double longitude})> Function();
+
+/// Drives the whole "mark attendance" flow.
 ///
-/// Recoverable failures (no face, no network, location off…) drop the user
-/// back on the live camera with a message rather than a dead-end screen;
-/// only "the camera itself won't open" uses [MarkAttendanceStatus.error].
+/// The person is asked to turn their head left and right (in a random order,
+/// then look straight) while the live camera is watched ([onFrame]). Frames from
+/// that check itself — before the turns, at each turn, and at the end — are
+/// kept, so the person who is recorded is the person who did the turns: the
+/// final frame must match their enrolled faces (fetched fresh from the backend,
+/// so a re-enrolment takes effect immediately) and the others must be the same
+/// face as it. Only then are location and time captured and the record
+/// uploaded. Nothing is recorded unless all of that holds — enforced here, and
+/// the backend never re-derives it, so this cubit is the only place that
+/// decision gets made.
+///
+/// A check that fails lets the person try again with a new random challenge;
+/// after [maxFailures] failures in a row they are told to ask their admin.
+/// Recoverable trouble (no network, location off…) drops back to a fresh check
+/// with a message; only "the camera itself won't open" uses
+/// [MarkAttendanceStatus.error].
 class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
   MarkAttendanceCubit({
     required String staffId,
@@ -29,49 +48,173 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
     required FaceEmbeddingService embeddingService,
     required StaffService staffService,
     required AttendanceService attendanceService,
+    this.maxFailures = 3,
+    bool? framesMirrored,
+    Random? random,
+    Locator? locate,
+    Future<String> Function()? newPhotoPath,
+    DateTime Function()? clock,
   }) : _staffId = staffId,
        _camera = camera,
        _embeddingService = embeddingService,
        _staffService = staffService,
        _attendanceService = attendanceService,
-       super(const MarkAttendanceState());
+       _framesMirrored = framesMirrored ?? Env.livenessFramesMirrored,
+       _random = random ?? Random(),
+       _locate = locate ?? _currentPosition,
+       _newPhotoPath = newPhotoPath ?? _defaultPhotoPath,
+       _clock = clock ?? DateTime.now,
+       super(const MarkAttendanceState()) {
+    _startAttempt();
+  }
 
   final String _staffId;
   final CameraCaptureController _camera;
   final FaceEmbeddingService _embeddingService;
   final StaffService _staffService;
   final AttendanceService _attendanceService;
+  final bool _framesMirrored;
+  final Random _random;
+  final Locator _locate;
+  final Future<String> Function() _newPhotoPath;
+  final DateTime Function() _clock;
+
+  /// How many failed checks in a row lock the screen.
+  final int maxFailures;
+
+  late LivenessSession _session;
+  late LivenessCoach _coach;
+  final Map<String, _KeptFrame> _kept = {};
+
+  /// What to show the person right now (prompt, turn line, ring, message).
+  late final ValueNotifier<LivenessGuidance> guidance = ValueNotifier(_coach.idle());
+
+  Timer? _watchdog;
+  DateTime? _lastFrameAt;
+  Duration _lastObservationAt = Duration.zero;
+  DateTime? _passedAt;
+
+  /// The turns being asked for in this attempt, in order.
+  List<TurnSide> get challenge => _session.challenge;
 
   /// Exposed so the view can hand the underlying [CameraController] to a
   /// [CameraPreview] widget — the cubit doesn't hold any UI itself.
   CameraCaptureController get camera => _camera;
 
   Future<void> initializeCamera() async {
-    emit(const MarkAttendanceState());
+    emit(MarkAttendanceState(failedAttempts: state.failedAttempts));
     try {
       await _camera.initialize();
-      emit(const MarkAttendanceState(status: MarkAttendanceStatus.cameraReady));
+      _watchdog ??= Timer.periodic(const Duration(milliseconds: 500), (_) => _checkForStall());
+      emit(MarkAttendanceState(status: MarkAttendanceStatus.cameraReady, failedAttempts: state.failedAttempts));
     } catch (_) {
       emit(
-        const MarkAttendanceState(
+        MarkAttendanceState(
           status: MarkAttendanceStatus.error,
           errorMessage: 'Could not open the camera. Check that camera access is allowed for this app.',
+          failedAttempts: state.failedAttempts,
         ),
       );
     }
   }
 
-  Future<void> markAttendance() async {
-    emit(const MarkAttendanceState(status: MarkAttendanceStatus.processing));
+  /// One analysed frame from the live preview.
+  void onFrame(AnalyzedFrame frame) {
+    if (state.status != MarkAttendanceStatus.cameraReady || _session.isFinished) return;
+
+    final observation = frame.observation;
+    _lastFrameAt = _clock();
+    _lastObservationAt = observation.at;
+
+    final keep = _session.onObservation(observation);
+    if (keep != null) _keepFrame(keep, frame);
+    guidance.value = _coach.coach(observation);
+    _react();
+  }
+
+  /// Start a new check after a failure.
+  void retry() {
+    _startAttempt();
+    emit(MarkAttendanceState(status: MarkAttendanceStatus.cameraReady, failedAttempts: state.failedAttempts));
+  }
+
+  // ---- the check ------------------------------------------------------------
+
+  void _startAttempt() {
+    _session = LivenessSession.random(_random);
+    _coach = LivenessCoach(_session);
+    _kept.clear();
+    _lastFrameAt = null;
+    _passedAt = null;
+    if (!isClosed) guidance.value = _coach.idle();
+  }
+
+  /// Keeps the frames the identity rule needs: the start frame, the best frame of
+  /// each turn (replaced whenever a better one comes), and the final frame.
+  void _keepFrame(KeepFrame keep, AnalyzedFrame frame) {
+    final box = frame.faceBox;
+    final copy = frame.snapshot();
+    if (box == null || copy == null) return;
+
+    final key = switch (keep.role) {
+      FrameRole.start => 'start',
+      FrameRole.turnPeak => 'turn${keep.turnIndex}',
+      FrameRole.finalStraight => 'final',
+    };
+    _kept[key] = _KeptFrame(copy, box);
+  }
+
+  void _react() {
+    switch (_session.phase) {
+      case LivenessPhase.passed:
+        _passedAt = _clock();
+        unawaited(_verifyAndRecord());
+      case LivenessPhase.failed:
+        _failed(LivenessCoach.messageForFailure(_session.failure!));
+      case LivenessPhase.waitingForFace:
+      case LivenessPhase.holdStill:
+      case LivenessPhase.turning:
+      case LivenessPhase.lookStraight:
+        break;
+    }
+  }
+
+  /// If the camera stops delivering frames, the check must still time out rather than hang.
+  void _checkForStall() {
+    if (state.status != MarkAttendanceStatus.cameraReady || _session.isFinished) return;
+    final last = _lastFrameAt;
+    if (last == null) return;
+    final silent = _clock().difference(last);
+    if (silent < const Duration(seconds: 1)) return;
+
+    _session.onTick(_lastObservationAt + silent);
+    _react();
+  }
+
+  // ---- verifying and recording ---------------------------------------------
+
+  Future<void> _verifyAndRecord() async {
+    emit(MarkAttendanceState(status: MarkAttendanceStatus.processing, failedAttempts: state.failedAttempts));
     try {
-      // Capture first so the shot is the moment the user pressed the
-      // shutter, not after a network round-trip.
-      final photo = await _camera.capture();
-      final capturedAt = DateTime.now();
+      // The staff member's profile is fetched while their frames are being read.
+      final staffFuture = _staffService.getById(_staffId);
 
-      final sample = await _embeddingService.generateEmbedding(photo.path);
+      final start = _kept['start'];
+      final turns = [for (var i = 0; i < _session.totalTurns; i++) _kept['turn$i']];
+      final end = _kept['final'];
+      if (start == null || end == null || turns.any((t) => t == null)) {
+        _failed('The camera did not give a clear picture. Please try again.');
+        return;
+      }
 
-      final staff = await _staffService.getById(_staffId);
+      final photoPath = await _newPhotoPath();
+      final others = <List<double>>[];
+      for (final frame in [start, ...turns.cast<_KeptFrame>()]) {
+        others.add((await _embed(frame)).embedding);
+      }
+      final finalSample = await _embed(end, saveJpegTo: photoPath);
+
+      final staff = await staffFuture;
       // Only templates made by this build's face model are comparable.
       final templates = staff.embeddingsFor(Env.faceModelVersion);
       if (templates.isEmpty) {
@@ -82,25 +225,55 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
         );
       }
 
-      final result = _embeddingService.compareToAny(templates, sample.embedding);
+      final identity = evaluateLivenessIdentity(
+        finalEmbedding: finalSample.embedding,
+        otherEmbeddings: others,
+        templates: templates,
+        matchThreshold: Env.faceMatchThreshold,
+        sameFaceMin: Env.enrolmentMinSimilarity,
+        expectedOthers: 1 + _session.totalTurns,
+      );
+      if (!kReleaseMode) await _logIdentity(identity, end, templates, finalSample);
 
-      if (!result.isMatch) {
-        emit(MarkAttendanceState(status: MarkAttendanceStatus.matchFailed, similarity: result.similarity));
-        return;
+      switch (identity.failure) {
+        case null:
+          break;
+        case IdentityFailure.noMatch:
+          _failed('', similarity: identity.similarityToEnrolled, matchFailure: true);
+          return;
+        case IdentityFailure.differentPerson:
+          _failed('The face changed during the check. Only you should be in the picture.');
+          return;
+        case IdentityFailure.missingFrames:
+          _failed('The camera did not give a clear picture. Please try again.');
+          return;
       }
 
-      final position = await _currentPosition();
+      final position = await _locate();
+      final result = _session.result!;
 
       await _attendanceService.record(
         staffId: _staffId,
-        selfiePath: sample.imagePath,
+        selfiePath: photoPath,
         latitude: position.latitude,
         longitude: position.longitude,
-        matchConfidence: result.similarity,
-        capturedAt: capturedAt,
+        matchConfidence: identity.similarityToEnrolled,
+        capturedAt: _passedAt ?? _clock(),
+        liveness: {
+          'version': 1,
+          'challenge': [for (final side in result.challenge) side.name],
+          'durationMs': result.duration.inMilliseconds,
+          'peakYaws': [for (final v in result.peakYaws) double.parse(v.toStringAsFixed(1))],
+          'peakTurnRatios': [for (final v in result.peakTurnRatios) double.parse(v.toStringAsFixed(3))],
+          'baselineYaw': double.parse(result.baselineYaw.toStringAsFixed(1)),
+          'baselineRatio': double.parse(result.baselineRatio.toStringAsFixed(3)),
+          'sameFaceMin': identity.lowestSameFace == null
+              ? null
+              : double.parse(identity.lowestSameFace!.toStringAsFixed(3)),
+        },
       );
 
-      emit(MarkAttendanceState(status: MarkAttendanceStatus.success, similarity: result.similarity));
+      emit(MarkAttendanceState(status: MarkAttendanceStatus.success, similarity: identity.similarityToEnrolled));
     } on FaceProcessingException catch (e) {
       _backToCamera(e.message);
     } on ApiException catch (e) {
@@ -113,14 +286,75 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
     }
   }
 
-  void retry() => emit(const MarkAttendanceState(status: MarkAttendanceStatus.cameraReady));
+  Future<FaceSample> _embed(_KeptFrame kept, {String? saveJpegTo}) =>
+      _embeddingService.embedFrame(kept.frame, kept.box, framesMirrored: _framesMirrored, saveJpegTo: saveJpegTo);
 
-  void _backToCamera(String message) {
-    if (isClosed) return;
-    emit(MarkAttendanceState(status: MarkAttendanceStatus.cameraReady, errorMessage: message));
+  /// Debug builds only: how the final frame scored against the enrolled faces, and what it would
+  /// have scored the other way round — the quickest way to confirm on a device that the stream
+  /// really is (or isn't) mirrored.
+  Future<void> _logIdentity(
+    LivenessIdentityResult identity,
+    _KeptFrame end,
+    List<List<double>> templates,
+    FaceSample finalSample,
+  ) async {
+    try {
+      final other = await _embeddingService.embedFrame(end.frame, end.box, framesMirrored: !_framesMirrored);
+      final otherBest = templates.map((t) => _embeddingService.compare(t, other.embedding).similarity).reduce(max);
+      debugPrint(
+        '[attendance] identity: final vs enrolled ${identity.similarityToEnrolled.toStringAsFixed(3)} '
+        '(mirrored=$_framesMirrored), other way round ${otherBest.toStringAsFixed(3)}; '
+        'lowest same-face ${identity.lowestSameFace?.toStringAsFixed(3)}; failure=${identity.failure?.name}',
+      );
+    } catch (e) {
+      debugPrint('[attendance] identity log failed: $e');
+    }
   }
 
-  Future<Position> _currentPosition() async {
+  // ---- outcomes ---------------------------------------------------------------
+
+  /// A check that did not pass: try again, or lock the screen after too many in a row.
+  void _failed(String message, {double? similarity, bool matchFailure = false}) {
+    if (isClosed) return;
+    final attempts = state.failedAttempts + 1;
+    final MarkAttendanceStatus status;
+    if (attempts >= maxFailures) {
+      status = MarkAttendanceStatus.lockedOut;
+    } else {
+      status = matchFailure ? MarkAttendanceStatus.matchFailed : MarkAttendanceStatus.livenessFailed;
+    }
+    emit(MarkAttendanceState(status: status, similarity: similarity, errorMessage: message, failedAttempts: attempts));
+  }
+
+  /// Trouble that is not the person's fault (network, location…): straight back to a fresh check.
+  void _backToCamera(String message) {
+    if (isClosed) return;
+    _startAttempt();
+    emit(
+      MarkAttendanceState(
+        status: MarkAttendanceStatus.cameraReady,
+        errorMessage: message,
+        failedAttempts: state.failedAttempts,
+      ),
+    );
+  }
+
+  @override
+  Future<void> close() async {
+    _watchdog?.cancel();
+    guidance.dispose();
+    await _camera.dispose();
+    return super.close();
+  }
+
+  // ---- platform defaults ------------------------------------------------------
+
+  static Future<String> _defaultPhotoPath() async {
+    final dir = await getTemporaryDirectory();
+    return '${dir.path}/attendance_${DateTime.now().microsecondsSinceEpoch}.jpg';
+  }
+
+  static Future<({double latitude, double longitude})> _currentPosition() async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       throw FaceProcessingException('Location services are off. Turn them on to mark attendance.');
@@ -134,14 +368,17 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
       throw FaceProcessingException('Location permission is required to mark attendance.');
     }
 
-    return Geolocator.getCurrentPosition(
+    final position = await Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 15)),
     );
+    return (latitude: position.latitude, longitude: position.longitude);
   }
+}
 
-  @override
-  Future<void> close() async {
-    await _camera.dispose();
-    return super.close();
-  }
+/// A frame kept from the check, with where the face is on it.
+class _KeptFrame {
+  const _KeptFrame(this.frame, this.box);
+
+  final CameraFrame frame;
+  final Rect box;
 }

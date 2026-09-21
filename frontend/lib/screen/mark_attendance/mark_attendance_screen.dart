@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../config/env.dart';
 import '../../config/di/service_locator.dart';
 import '../../widgets/camera_status_view.dart';
-import '../../widgets/face_camera_view.dart';
+import '../../widgets/pose_camera_view.dart';
 import '../../widgets/loading_overlay.dart';
 import '../../bloc/auth/auth_cubit.dart';
 import '../../bloc/mark_attendance/mark_attendance_cubit.dart';
@@ -96,9 +96,31 @@ class _MarkAttendanceView extends StatelessWidget {
           title: 'Face not recognised',
           message:
               'Your face did not match the enrolled photo, so attendance was not recorded.'
-              '${_scoreNote(state)}',
+              '${_scoreNote(state)}${_attemptsNote(cubit, state)}',
           primaryLabel: 'Try again',
           onPrimary: cubit.retry,
+        );
+
+      case MarkAttendanceStatus.livenessFailed:
+        return CameraStatusView(
+          icon: AppIcons.faceOff,
+          color: Theme.of(context).colorScheme.error,
+          title: 'Check not passed',
+          message: '${state.errorMessage ?? 'The head-turn check did not pass.'}${_attemptsNote(cubit, state)}',
+          primaryLabel: 'Try again',
+          onPrimary: cubit.retry,
+        );
+
+      case MarkAttendanceStatus.lockedOut:
+        return CameraStatusView(
+          icon: AppIcons.faceOff,
+          color: Theme.of(context).colorScheme.error,
+          title: 'Having trouble?',
+          message:
+              'The check did not pass after ${cubit.maxFailures} tries, so attendance was not recorded. '
+              'Please ask your admin for help.',
+          primaryLabel: 'Back',
+          onPrimary: () => context.pop(false),
         );
 
       case MarkAttendanceStatus.success:
@@ -117,10 +139,17 @@ class _MarkAttendanceView extends StatelessWidget {
         final processing = state.status == MarkAttendanceStatus.processing;
         return Stack(
           children: [
-            FaceCameraView(camera: cubit.camera, busy: processing, onCapture: cubit.markAttendance),
-            LoadingOverlay(visible: processing, message: 'Verifying face…'),
+            PoseCameraView(camera: cubit.camera, guidance: cubit.guidance, onFrame: cubit.onFrame, busy: processing),
+            LoadingOverlay(visible: processing, message: 'Verifying…'),
           ],
         );
     }
+  }
+
+  /// How many tries are left before the person is told to ask their admin.
+  String _attemptsNote(MarkAttendanceCubit cubit, MarkAttendanceState state) {
+    final left = cubit.maxFailures - state.failedAttempts;
+    if (left <= 0) return '';
+    return '\n\n$left ${left == 1 ? 'try' : 'tries'} left.';
   }
 }

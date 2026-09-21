@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../utils/http/api_client.dart';
 
@@ -15,6 +16,7 @@ class AttendanceService {
     required double longitude,
     required double matchConfidence,
     required DateTime capturedAt,
+    Map<String, Object?>? liveness,
   }) {
     return runApiCall(() async {
       final formData = FormData.fromMap({
@@ -25,6 +27,8 @@ class AttendanceService {
         // Explicit UTC ("…Z"): a bare local timestamp would be parsed in the
         // *server's* timezone, shifting the recorded date/time.
         'capturedAt': capturedAt.toUtc().toIso8601String(),
+        // What the head-turn check saw (which turns, how long, how far), kept for the audit trail.
+        'liveness': ?(liveness == null ? null : jsonEncode(liveness)),
         'selfie': await MultipartFile.fromFile(selfiePath, filename: 'attendance.jpg'),
       });
       await _client.dio.post('/attendance', data: formData);
