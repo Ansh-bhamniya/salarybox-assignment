@@ -163,6 +163,15 @@ Measured on an iPhone: the stream arrives mirrored, and face boxes are relative 
 the upright 720×1280 frame (Android hands over the sideways sensor buffer, so its
 width and height swap: `services/camera_input_image.dart`).
 
+## Matching
+
+Attendance matches the fresh selfie against every template of
+`Env.faceModelVersion` and takes the best score (`FaceEmbeddingService.
+compareToAny`). Templates from another model version are ignored, and a person
+who only has those is told to ask their admin to re-enrol them. `Staff` carries all
+of a person's active templates, and backend errors carry an optional `code` and
+`details` (`ApiException`).
+
 ## Networking
 
 `utils/http/api_client.dart` wraps `dio` with an interceptor that attaches

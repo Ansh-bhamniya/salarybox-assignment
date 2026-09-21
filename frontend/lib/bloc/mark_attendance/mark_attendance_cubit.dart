@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
+import '../../config/env.dart';
 import '../../utils/http/api_exception.dart';
 import '../../services/camera_capture_controller.dart';
 import '../../services/face_embedding_service.dart';
@@ -71,12 +72,17 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
       final sample = await _embeddingService.generateEmbedding(photo.path);
 
       final staff = await _staffService.getById(_staffId);
-      final enrolledEmbedding = staff.faceEmbedding;
-      if (enrolledEmbedding == null) {
-        throw FaceProcessingException('Your face hasn\'t been enrolled yet. Contact your admin.');
+      // Only templates made by this build's face model are comparable.
+      final templates = staff.embeddingsFor(Env.faceModelVersion);
+      if (templates.isEmpty) {
+        throw FaceProcessingException(
+          staff.faceTemplates.isEmpty
+              ? 'Your face hasn\'t been enrolled yet. Contact your admin.'
+              : 'Your face needs to be enrolled again for this version of the app. Contact your admin.',
+        );
       }
 
-      final result = _embeddingService.compare(enrolledEmbedding, sample.embedding);
+      final result = _embeddingService.compareToAny(templates, sample.embedding);
 
       if (!result.isMatch) {
         emit(MarkAttendanceState(status: MarkAttendanceStatus.matchFailed, similarity: result.similarity));

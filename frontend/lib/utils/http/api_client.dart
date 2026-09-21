@@ -34,11 +34,14 @@ class ApiClient {
         ? data['error'] as String
         : error.message ?? 'Network error';
 
+    final code = (data is Map && data['code'] is String) ? data['code'] as String : null;
+    final details = data is Map ? data['details'] : null;
+
     return DioException(
       requestOptions: error.requestOptions,
       response: error.response,
       type: error.type,
-      error: ApiException(message, statusCode: error.response?.statusCode),
+      error: ApiException(message, statusCode: error.response?.statusCode, code: code, details: details),
     );
   }
 }

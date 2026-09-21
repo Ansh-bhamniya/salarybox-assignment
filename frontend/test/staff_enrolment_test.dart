@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/config/di/service_locator.dart';
 import 'package:frontend/bloc/staff_list/staff_list_cubit.dart';
+import 'package:frontend/models/duplicate_match.dart';
 import 'package:frontend/models/staff.dart';
 import 'package:frontend/screen/staff_list/staff_list_screen.dart';
 import 'package:frontend/services/staff_service.dart';
@@ -30,6 +31,97 @@ void main() {
     test('falls back to the photo for a backend that predates the flag', () {
       expect(parse({'enrollment_photo_url': 'https://x/p.jpg'}).isEnrolled, isTrue);
       expect(parse({}).isEnrolled, isFalse);
+    });
+  });
+
+  group('Staff face templates', () {
+    Staff parse(Map<String, dynamic> extra) =>
+        Staff.fromJson({'id': '1', 'employee_id': 'E-1', 'name': 'Sam', ...extra});
+
+    test('reads every active template, frontal first', () {
+      final staff = parse({
+        'enrolled': true,
+        'face_templates': [
+          {
+            'id': 'a',
+            'model_version': 'm1',
+            'embedding': [1, 0],
+          },
+          {
+            'id': 'b',
+            'model_version': 'm1',
+            'embedding': [0.5, 0.5],
+          },
+        ],
+      });
+
+      expect(staff.faceTemplates.length, 2);
+      expect(staff.faceEmbedding, [1.0, 0.0]);
+    });
+
+    test('only templates from the asked-for model version are comparable', () {
+      final staff = parse({
+        'face_templates': [
+          {
+            'id': 'a',
+            'model_version': 'old-model',
+            'embedding': [1, 0],
+          },
+          {
+            'id': 'b',
+            'model_version': 'm1',
+            'embedding': [0, 1],
+          },
+          {
+            'id': 'c',
+            'model_version': 'm1',
+            'embedding': [0.5, 0.5],
+          },
+        ],
+      });
+
+      expect(staff.embeddingsFor('m1'), [
+        [0.0, 1.0],
+        [0.5, 0.5],
+      ]);
+      expect(staff.embeddingsFor('missing'), isEmpty);
+    });
+
+    test('a backend that only sends one embedding is treated as one template of the current model', () {
+      final staff = parse({
+        'face_embedding': [0.1, 0.2],
+      });
+
+      expect(staff.faceTemplates.single.modelVersion, FaceTemplate.legacyModelVersion);
+      expect(staff.embeddingsFor(FaceTemplate.legacyModelVersion), [
+        [0.1, 0.2],
+      ]);
+    });
+
+    test('list responses carry no templates', () {
+      final staff = parse({'enrolled': true});
+
+      expect(staff.faceTemplates, isEmpty);
+      expect(staff.faceEmbedding, isNull);
+    });
+  });
+
+  group('DuplicateMatch.listFrom', () {
+    test('reads the matches out of the error details', () {
+      final matches = DuplicateMatch.listFrom({
+        'matches': [
+          {'staffId': '9', 'employeeId': 'E-9', 'name': 'Ravi', 'similarity': 0.83},
+        ],
+      });
+
+      expect(matches.single.name, 'Ravi');
+      expect(matches.single.similarity, 0.83);
+    });
+
+    test('anything unexpected yields no matches instead of throwing', () {
+      expect(DuplicateMatch.listFrom(null), isEmpty);
+      expect(DuplicateMatch.listFrom('nope'), isEmpty);
+      expect(DuplicateMatch.listFrom({'matches': 'nope'}), isEmpty);
     });
   });
 

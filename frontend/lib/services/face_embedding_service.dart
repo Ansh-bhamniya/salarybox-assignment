@@ -168,12 +168,23 @@ class FaceEmbeddingService {
     return outPath;
   }
 
-  FaceMatchResult compare(List<double> enrolled, List<double> fresh) {
-    final similarity = _cosineSimilarity(enrolled, fresh);
-    if (!kReleaseMode) {
-      debugPrint('[face] similarity=${similarity.toStringAsFixed(3)} threshold=${Env.faceMatchThreshold}');
+  FaceMatchResult compare(List<double> enrolled, List<double> fresh) => compareToAny([enrolled], fresh);
+
+  /// Compares a fresh embedding with every enrolled template and keeps the
+  /// best score, so one good capture out of several is enough. No templates
+  /// never matches.
+  FaceMatchResult compareToAny(List<List<double>> enrolled, List<double> fresh) {
+    var best = 0.0;
+    for (var i = 0; i < enrolled.length; i++) {
+      final similarity = _cosineSimilarity(enrolled[i], fresh);
+      if (i == 0 || similarity > best) best = similarity;
     }
-    return FaceMatchResult(isMatch: similarity >= Env.faceMatchThreshold, similarity: similarity);
+    if (!kReleaseMode) {
+      debugPrint(
+        '[face] similarity=${best.toStringAsFixed(3)} (best of ${enrolled.length}) threshold=${Env.faceMatchThreshold}',
+      );
+    }
+    return FaceMatchResult(isMatch: enrolled.isNotEmpty && best >= Env.faceMatchThreshold, similarity: best);
   }
 
   /// Different lengths (e.g. an enrolment made before this model existed)
