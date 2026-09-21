@@ -2,7 +2,7 @@
 
 A two-role attendance app. An **admin** adds staff and enrols their faces; **staff** mark their own attendance with a selfie that must match their enrolled face. Location and time are captured automatically at the moment of marking.
 
-- **Frontend** — Flutter (Android), in `frontend/`
+- **Frontend** — Flutter, built for Android (the assignment's target); developed and tested on an iPhone. In `frontend/`
 - **Backend** — Node.js + Express API, in `backend/`, deployed on Vercel
 - **Data** — Supabase (Postgres for records, Storage for photos)
 
@@ -160,6 +160,7 @@ The backend tests cover input validation and error responses; they don't need a 
 - Attendance needs a **head-turn check** (turn left and right in a random order, then look straight), which a still photo — printed or on another screen — cannot pass, and neither can a photo that is rotated like a head (the nose does not move against the eyes). It does **not** stop a video replay of the person turning, a 3D mask, or a modified app. The check runs on the phone: the server stores what the app says it saw (`attendance.liveness`) and can require it (`LIVENESS_REQUIRED`), but cannot verify the claim. Stopping those needs a passive anti-spoof model and server-side verification with app attestation, which are not built.
 - The head-turn check was measured and tuned on an **iPhone only**. The direction rule comes from face geometry so it should carry over, but Android's frame format and mirroring have not been verified on a device. The thresholds are provisional until tested against real attacks.
 - The match threshold (`0.55` cosine similarity, in `frontend/lib/config/env.dart`) was calibrated offline on public LFW photos, not on real enrolment/selfie pairs from this app. Expect to tune it. Build with `--dart-define=SHOW_MATCH_SCORE=true` to show the raw score on the result screen while calibrating.
+- **What was measured** (one iPhone, one enrolled person, so a small sample): with templates made from still photos, check-ins scored 0.44–0.70 against the 0.55 threshold and roughly half of genuine attempts in varied light were rejected. The cause is that a still and a live camera frame of the same face score about 0.2 lower against each other than two live frames do. Enrolment templates are therefore now built from live frames (see *How it works*); after that change the one check recorded so far scored 0.97, but there are too few attempts to quote a reliable pass rate. Not done on a device: attacks with a printed photo, a tilted photo or a photo swapped in after the turns, and attempts by a second person. The threshold has not been tuned against impostor scores.
 - Each person is enrolled from three photos and matched against all of them (best score wins). Re-enrolling replaces the whole set; the old templates are kept, marked revoked, with a reason and an audit entry. Templates never update themselves from later selfies, and staff are not notified when they are re-enrolled.
 - Duplicate-face detection compares a new enrolment with everyone else's active templates (pgvector, same face-model version only). Its threshold (`DUPLICATE_FACE_THRESHOLD`, default 0.6) is a provisional guess until calibrated on real photos, so it can miss a match or flag a lookalike; an admin can override a flag with a reason. Two enrolments of the same face at the very same moment could both slip through.
 - Staff can't mark attendance until an admin has enrolled their face. The app disables the button, and the server also refuses the record (409 `not_enrolled`) and logs the attempt.
@@ -173,7 +174,7 @@ The backend tests cover input validation and error responses; they don't need a 
 **Platform and infrastructure**
 
 - Attendance marking needs a network connection. There is no offline queue or retry.
-- Built and tested for Android. The iOS project exists but has not been verified.
+- Built for Android, but all on-device testing was done on an **iPhone**. The release APK compiles and the Android camera-frame code is unit-tested, but it has **not been run on an Android device**, so the head-turn check on Android is unverified.
 - Vercel rejects request bodies over 4.5 MB (the API itself allows 8 MB). Selfies are JPEG-encoded by the app and should be well below this, but their size hasn't been measured — very large images would fail.
 - The release APK is signed with the debug key, not a Play Store signing key.
 
