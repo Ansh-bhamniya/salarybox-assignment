@@ -175,12 +175,7 @@ class _FaceEnrolmentViewState extends State<_FaceEnrolmentView> {
         final processing = state.status == FaceCaptureStatus.processing;
         return Stack(
           children: [
-            PoseCameraView(
-              camera: cubit.camera,
-              guidance: cubit.guidance,
-              onFrame: (frame) => cubit.onObservation(frame.observation),
-              busy: processing,
-            ),
+            PoseCameraView(camera: cubit.camera, guidance: cubit.guidance, onFrame: cubit.onFrame, busy: processing),
             LoadingOverlay(visible: processing, message: 'Analyzing face…'),
           ],
         );

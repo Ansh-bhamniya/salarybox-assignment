@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:math';
 import 'package:camera/camera.dart';
 import 'package:dio/dio.dart' show FormData;
@@ -14,7 +15,9 @@ import 'package:frontend/screen/face_enrolment/enrolment_dialogs.dart';
 import 'package:frontend/services/camera_capture_controller.dart';
 import 'package:frontend/services/face_embedding_service.dart';
 import 'package:frontend/services/liveness/enrolment_pose_guide.dart';
+import 'package:frontend/services/liveness/camera_frame.dart';
 import 'package:frontend/services/liveness/face_observation.dart';
+import 'package:frontend/services/liveness/liveness_analyzer.dart';
 import 'package:frontend/services/staff_service.dart';
 import 'package:frontend/utils/http/api_client.dart';
 import 'helpers/fake_http_adapter.dart';
@@ -53,6 +56,24 @@ class _FakeEmbeddings implements FaceEmbeddingService {
     final next = results.removeAt(0);
     if (next is Exception) throw next;
     return next as FaceSample;
+  }
+
+  /// What [embedFrame] hands out, in order (an exception is thrown); empty means "not available".
+  final List<Object> frameResults = [];
+  var framesEmbedded = 0;
+
+  @override
+  Future<FaceSample> embedFrame(
+    CameraFrame frame,
+    Rect faceBox, {
+    required bool framesMirrored,
+    String? saveJpegTo,
+  }) async {
+    framesEmbedded++;
+    if (frameResults.isEmpty) throw UnimplementedError('no frame embeddings in this test');
+    final next = frameResults.removeAt(0);
+    if (next is Exception) throw next;
+    return FaceSample(embedding: next as List<double>, imagePath: '');
   }
 
   @override
@@ -155,6 +176,108 @@ void main() {
       await cubit.captureAndProcess();
 
       expect(cubit.state.status, FaceCaptureStatus.ready);
+    });
+  });
+
+  group('FaceCaptureCubit (templates from the live stream)', () {
+    const box = Rect.fromLTWH(100, 100, 300, 400);
+    final picture = CameraFrame(
+      bytes: Uint8List(16),
+      width: 2,
+      height: 2,
+      bytesPerRow: 8,
+      format: FrameFormat.bgra8888,
+      rotationDegrees: 0,
+    );
+
+    AnalyzedFrame frame(int i, {double yaw = 0, double ratio = 0}) => AnalyzedFrame(
+      observation: _obs(i, yaw: yaw, ratio: ratio),
+      snapshot: () => picture,
+      faceBox: box,
+    );
+
+    /// Feeds straight frames until the first photo has been taken; returns the cubit, its embeddings and camera.
+    Future<(FaceCaptureCubit, _FakeEmbeddings, _FakeCamera)> firstPhoto({
+      int streamFrames = 5,
+      List<Object> frames = const [],
+    }) async {
+      final camera = _FakeCamera();
+      final embeddings = _FakeEmbeddings([_shot(1, '/still.jpg', 2)])..frameResults.addAll(frames);
+      final cubit = FaceCaptureCubit(camera, embeddings, streamFrames: streamFrames, framesMirrored: true);
+      addTearDown(cubit.close);
+      await cubit.initializeCamera();
+      for (var i = 0; i < 40 && camera.captures == 0; i++) {
+        cubit.onFrame(frame(i));
+      }
+      await pumpEventQueue();
+      return (cubit, embeddings, camera);
+    }
+
+    test('the photo is stored with the average of the last frames of the hold, not the still\'s embedding', () async {
+      final (cubit, embeddings, _) = await firstPhoto(
+        frames: [_atCos(0.9), _atCos(0.9), _atCos(0.9), _atCos(0.9), _atCos(0.9)],
+      );
+
+      expect(cubit.state.shots.length, 1);
+      final shot = cubit.state.shots.single;
+      expect(embeddings.framesEmbedded, 5);
+      expect(shot.imagePath, '/still.jpg', reason: 'the still is still the photo that is uploaded');
+      expect(shot.yawDegrees, 2);
+      expect(shot.embedding, isNot(_atCos(1)));
+      expect(shot.embedding[0], closeTo(0.9, 1e-9));
+    });
+
+    test('only the last few frames of a long hold are used', () async {
+      final (_, embeddings, _) = await firstPhoto(streamFrames: 3, frames: [_atCos(0.9), _atCos(0.9), _atCos(0.9)]);
+
+      expect(embeddings.framesEmbedded, 3);
+    });
+
+    test('with no frame pictures (or no frames wanted) the still\'s embedding is kept', () async {
+      final camera = _FakeCamera();
+      final embeddings = _FakeEmbeddings([_shot(1, '/still.jpg', 2)]);
+      final cubit = FaceCaptureCubit(camera, embeddings, streamFrames: 0, framesMirrored: true);
+      addTearDown(cubit.close);
+      await cubit.initializeCamera();
+      for (var i = 0; i < 40 && camera.captures == 0; i++) {
+        cubit.onFrame(frame(i));
+      }
+      await pumpEventQueue();
+
+      expect(embeddings.framesEmbedded, 0);
+      expect(cubit.state.shots.single.embedding, _atCos(1));
+    });
+
+    test('if the frames cannot be embedded the enrolment goes on with the still', () async {
+      final (cubit, _, _) = await firstPhoto(frames: [StateError('boom')]);
+
+      expect(cubit.state.shots.length, 1);
+      expect(cubit.state.shots.single.embedding, _atCos(1));
+      expect(cubit.state.errorMessage, isNull);
+    });
+
+    test('frames from before the person moved are not used', () async {
+      final camera = _FakeCamera();
+      final embeddings = _FakeEmbeddings([_shot(1, '/still.jpg', 2)])
+        ..frameResults.addAll(List.generate(5, (_) => _atCos(0.9)));
+      final cubit = FaceCaptureCubit(camera, embeddings, framesMirrored: true);
+      addTearDown(cubit.close);
+      await cubit.initializeCamera();
+
+      var i = 0;
+      for (; i < 8; i++) {
+        cubit.onFrame(frame(i)); // steady for a while...
+      }
+      cubit.onFrame(frame(i++, yaw: 30, ratio: 0.5)); // ...then off to the side: the hold is broken
+      cubit.onFrame(frame(i++, yaw: 30, ratio: 0.5));
+      for (; i < 60 && camera.captures == 0; i++) {
+        cubit.onFrame(frame(i));
+      }
+      await pumpEventQueue();
+
+      // Five frames, all from the second steady hold.
+      expect(embeddings.framesEmbedded, 5);
+      expect(camera.captures, 1);
     });
   });
 
