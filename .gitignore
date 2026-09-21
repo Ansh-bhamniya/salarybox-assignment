@@ -4,3 +4,8 @@ frontend/android/build/
 
 # Local tool config (kept on disk, not in the repo)
 .mcp.json
+
+# AI tool skills
+.agents/
+.claude/skills/
+skills-lock.json
