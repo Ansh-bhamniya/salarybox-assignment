@@ -130,7 +130,7 @@ The backend tests cover input validation and error responses; they don't need a 
 1. **Admin** logs in → **Staff list** → **Add staff** (name + Employee ID).
 2. **Face enrolment:** the front camera takes three photos (straight, slightly left, slightly right). For each, ML Kit detects and crops the face and the TFLite model produces an embedding; the photos and embeddings are uploaded together. The stored embedding for each photo is the average of the last few live camera frames of the hold (the photo itself is a still), because the same face scores about 0.2 lower between a still and a live frame, and attendance checks compare live frames. If the face already belongs to another staff member the server refuses, and the admin can override with a reason that is audited.
 3. **Staff** logs in with their Employee ID → **Mark attendance:** there is no shutter. The person turns their head to one side, then the other (in a random order each time), then looks straight, while the live camera is watched. Frames from that check itself are kept — before the turns, at each turn, and at the end. The final straight frame must match the person's enrolled faces (fetched fresh from the backend; best score across their templates), and the other frames must be the same face as it, so whoever did the turns is who gets recorded. Only then are GPS location and time captured and the record uploaded, with the final frame as the photo and a summary of what the check saw. A check that fails can be retried with a new challenge as many times as needed; there is no lockout. Every failed check is reported to the backend.
-4. **Admin** opens a staff profile to see their history: selfie, date, time, and latitude/longitude for each record.
+4. **Admin** opens a staff profile to see their history: selfie, date, time, and latitude/longitude for each record. From the profile the admin can also delete the staff member (after a confirmation that says what goes with them).
 
 ### API
 
@@ -142,6 +142,7 @@ The backend tests cover input validation and error responses; they don't need a 
 | GET    | `/staff/:id`             | admin, or self | Profile including the active face templates |
 | POST   | `/staff/:id/enroll`      | admin          | Upload 1–5 captures: `photos` + `embeddings` (+ `modelVersion`, `reason`, `allowDuplicate`). 409 `duplicate_face` if the face matches another staff member. The original single `photo` + `embedding` form is still accepted |
 | GET    | `/staff/:id/attendance`  | admin, or self | Attendance history                      |
+| DELETE | `/staff/:id`             | admin          | Delete a staff member for good: profile, all face templates, attendance and failed-attempt records, and their stored photos and selfies. Recorded in the audit log. 204 on success |
 | POST   | `/attendance`            | staff (self)   | Record attendance (multipart selfie, plus an optional `liveness` JSON: what the head-turn check saw). 409 `not_enrolled` if the person has no active face; 409 `liveness_required` if the server requires the check and none was sent |
 | POST   | `/attendance/attempts`   | staff (self)   | Report a failed check: `outcome` (`liveness_failed` or `no_match`) and an optional short `reason`. Capped per hour |
 
@@ -151,6 +152,7 @@ The backend tests cover input validation and error responses; they don't need a 
 
 - Login is dummy by design, as the assignment allows. Passwords are stored and compared in plain text, and all staff share one password, so anyone who knows an Employee ID can log in as that person. There is no signup, password reset, or rate limiting.
 - Uploaded photos are stored in public Supabase buckets. The URLs are random but not access-controlled.
+- Deleting a staff member is permanent (no undo, no soft delete). The audit log keeps who deleted whom and how many records went. Stored pictures are removed from the buckets straight away, but Supabase's CDN may keep serving a cached copy of a public URL for up to an hour.
 - The server trusts the app's match decision. It does not re-verify the face, so a modified client could submit a fake record.
 
 **Face matching**
@@ -177,4 +179,4 @@ The backend tests cover input validation and error responses; they don't need a 
 
 **Out of scope**
 
-Editing or deleting staff, editing attendance records, multiple admin accounts, push notifications, offline sync, forgot-password, and pagination (lists are loaded in full).
+Editing staff, editing attendance records, multiple admin accounts, push notifications, offline sync, forgot-password, and pagination (lists are loaded in full).

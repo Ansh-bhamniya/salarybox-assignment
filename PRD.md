@@ -125,7 +125,7 @@ history (selfie, date, time, lat/long per entry), pulled from
 
 ## Out of scope
 
-Editing/deleting staff, editing attendance records, multi-admin accounts,
+Editing staff, editing attendance records, multi-admin accounts,
 push notifications, offline-first sync, forgot-password, pagination
 (staff/attendance lists are assumed small enough to load in full).
 

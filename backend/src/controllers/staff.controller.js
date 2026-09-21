@@ -26,6 +26,11 @@ export async function getById(req, res) {
   res.json(staff);
 }
 
+export async function remove(req, res) {
+  await staffService.deleteStaff(req.params.id, { actorUserId: req.user.userId });
+  res.status(204).end();
+}
+
 const MAX_REASON_LENGTH = 200;
 
 /**

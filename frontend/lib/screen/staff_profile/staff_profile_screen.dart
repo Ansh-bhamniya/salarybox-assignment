@@ -16,6 +16,8 @@ import '../../widgets/section_title.dart';
 import '../../config/theme/app_radius.dart';
 import '../../config/theme/app_icons.dart';
 import '../../widgets/app_back_button.dart';
+import '../../widgets/loading_overlay.dart';
+import './delete_staff_dialog.dart';
 
 class StaffProfileScreen extends StatelessWidget {
   const StaffProfileScreen({super.key, required this.staffId});
@@ -57,74 +59,110 @@ class _StaffProfileView extends StatelessWidget {
             case StaffProfileStatus.loaded:
               final staff = state.staff!;
               final theme = Theme.of(context);
-              return ContentWidth(
-                child: RefreshIndicator(
-                  onRefresh: () => context.read<StaffProfileCubit>().load(),
-                  child: ListView(
-                    padding: AppSpacing.page,
-                    children: [
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            children: [
-                              StaffAvatar(name: staff.name, photoUrl: staff.enrollmentPhotoUrl, radius: 48),
-                              const SizedBox(height: 16),
-                              Text(staff.name, style: AppTheme.display(context, size: 26)),
-                              const SizedBox(height: 4),
-                              Text(
-                                'ID: ${staff.employeeId}',
-                                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                              ),
-                              const SizedBox(height: 12),
-                              staff.isEnrolled
-                                  ? StatusChip(
-                                      label: 'Face enrolled',
-                                      icon: AppIcons.checkFilled,
-                                      color: theme.colorScheme.onSurface,
-                                    )
-                                  : StatusChip(
-                                      label: 'Face not enrolled',
-                                      icon: AppIcons.warning,
+              return Stack(
+                children: [
+                  ContentWidth(
+                    child: RefreshIndicator(
+                      onRefresh: () => context.read<StaffProfileCubit>().load(),
+                      child: ListView(
+                        padding: AppSpacing.page,
+                        children: [
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                children: [
+                                  StaffAvatar(name: staff.name, photoUrl: staff.enrollmentPhotoUrl, radius: 48),
+                                  const SizedBox(height: 16),
+                                  Text(staff.name, style: AppTheme.display(context, size: 26)),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'ID: ${staff.employeeId}',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
                                       color: theme.colorScheme.onSurfaceVariant,
                                     ),
-                              const SizedBox(height: 24),
-                              SizedBox(
-                                width: double.infinity,
-                                child: staff.isEnrolled
-                                    ? FilledButton.icon(
-                                        icon: const Icon(AppIcons.refresh),
-                                        label: const Text('Re-enrol face'),
-                                        onPressed: () =>
-                                            context.push(Routes.enrolOf(staffId, reEnrol: true), extra: staff.name),
-                                      )
-                                    : FilledButton.icon(
-                                        icon: const Icon(AppIcons.face),
-                                        label: const Text('Enrol face'),
-                                        onPressed: () => context.push(Routes.enrolOf(staffId), extra: staff.name),
-                                      ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  staff.isEnrolled
+                                      ? StatusChip(
+                                          label: 'Face enrolled',
+                                          icon: AppIcons.checkFilled,
+                                          color: theme.colorScheme.onSurface,
+                                        )
+                                      : StatusChip(
+                                          label: 'Face not enrolled',
+                                          icon: AppIcons.warning,
+                                          color: theme.colorScheme.onSurfaceVariant,
+                                        ),
+                                  const SizedBox(height: 24),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: staff.isEnrolled
+                                        ? FilledButton.icon(
+                                            icon: const Icon(AppIcons.refresh),
+                                            label: const Text('Re-enrol face'),
+                                            onPressed: () =>
+                                                context.push(Routes.enrolOf(staffId, reEnrol: true), extra: staff.name),
+                                          )
+                                        : FilledButton.icon(
+                                            icon: const Icon(AppIcons.face),
+                                            label: const Text('Enrol face'),
+                                            onPressed: () => context.push(Routes.enrolOf(staffId), extra: staff.name),
+                                          ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: TextButton.icon(
+                                      icon: const Icon(AppIcons.delete),
+                                      label: const Text('Delete staff'),
+                                      style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
+                                      onPressed: state.deleting ? null : () => _delete(context, state),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      const SectionTitle('Attendance history'),
-                      if (state.attendance.isEmpty)
-                        const _NoAttendance()
-                      else
-                        for (final record in state.attendance) ...[
-                          _AttendanceTile(record: record),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 24),
+                          const SectionTitle('Attendance history'),
+                          if (state.attendance.isEmpty)
+                            const _NoAttendance()
+                          else
+                            for (final record in state.attendance) ...[
+                              _AttendanceTile(record: record),
+                              const SizedBox(height: 8),
+                            ],
                         ],
-                    ],
+                      ),
+                    ),
                   ),
-                ),
+                  LoadingOverlay(visible: state.deleting, message: 'Deleting…'),
+                ],
               );
           }
         },
       ),
     );
+  }
+
+  Future<void> _delete(BuildContext context, StaffProfileState state) async {
+    final staff = state.staff!;
+    final cubit = context.read<StaffProfileCubit>();
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
+
+    final confirmed = await confirmDeleteStaff(context, name: staff.name, attendanceRecords: state.attendance.length);
+    if (!confirmed) return;
+
+    final problem = await cubit.delete();
+    messenger.hideCurrentSnackBar();
+    if (problem != null) {
+      messenger.showSnackBar(SnackBar(content: Text(problem)));
+      return;
+    }
+    messenger.showSnackBar(SnackBar(content: Text('${staff.name} was deleted')));
+    if (router.canPop()) router.pop();
   }
 }
 

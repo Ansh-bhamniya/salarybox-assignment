@@ -1,6 +1,6 @@
 import { supabase } from '../config/supabase.js';
 import { ApiError } from '../utils/ApiError.js';
-import { uploadEnrollmentPhoto } from './storage.service.js';
+import { removeImagesByUrl, uploadEnrollmentPhoto } from './storage.service.js';
 import { env } from '../config/env.js';
 import { findDuplicateFaces, getActiveTemplates } from './face-template.service.js';
 
@@ -109,4 +109,50 @@ export async function enrollFaces(
 
   const staff = Array.isArray(data) ? data[0] : data;
   return { ...staff, enrolled: true, templates: embeddings.length };
+}
+
+/**
+ * Permanently deletes a staff member: their profile, every face template (active
+ * or revoked), attendance record and failed-attempt report go with it (the
+ * tables cascade), then the stored photos and selfies are removed. The deletion
+ * is written to the audit log, which keeps who did it and what was removed.
+ */
+export async function deleteStaff(id, { actorUserId } = {}) {
+  const { data: staff, error: findError } = await supabase
+    .from('staff')
+    .select('id, employee_id, name, enrollment_photo_url')
+    .eq('id', id)
+    .maybeSingle();
+  if (findError) throw new ApiError(500, findError.message);
+  if (!staff) throw new ApiError(404, 'Staff not found');
+
+  const [attendance, templates] = await Promise.all([
+    supabase.from('attendance').select('selfie_url').eq('staff_id', id),
+    supabase.from('face_templates').select('photo_url').eq('staff_id', id),
+  ]);
+  if (attendance.error) throw new ApiError(500, attendance.error.message);
+  if (templates.error) throw new ApiError(500, templates.error.message);
+
+  const { error: deleteError } = await supabase.from('staff').delete().eq('id', id);
+  if (deleteError) throw new ApiError(500, deleteError.message);
+
+  const { error: auditError } = await supabase.from('audit_log').insert({
+    actor_user_id: actorUserId ?? null,
+    action: 'staff.delete',
+    target_type: 'staff',
+    target_id: id,
+    details: {
+      name: staff.name,
+      employee_id: staff.employee_id,
+      attendance_records: attendance.data.length,
+      face_templates: templates.data.length,
+    },
+  });
+  if (auditError) console.error(`Could not write the audit entry for deleting staff ${id}: ${auditError.message}`);
+
+  await removeImagesByUrl([
+    staff.enrollment_photo_url,
+    ...attendance.data.map((row) => row.selfie_url),
+    ...templates.data.map((row) => row.photo_url),
+  ]);
 }

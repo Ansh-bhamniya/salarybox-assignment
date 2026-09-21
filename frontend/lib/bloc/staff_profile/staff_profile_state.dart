@@ -5,7 +5,13 @@ import '../../models/staff.dart';
 enum StaffProfileStatus { loading, loaded, error }
 
 class StaffProfileState extends Equatable {
-  const StaffProfileState({required this.status, this.staff, this.attendance = const [], this.errorMessage});
+  const StaffProfileState({
+    required this.status,
+    this.staff,
+    this.attendance = const [],
+    this.errorMessage,
+    this.deleting = false,
+  });
 
   const StaffProfileState.loading() : this(status: StaffProfileStatus.loading);
 
@@ -14,6 +20,9 @@ class StaffProfileState extends Equatable {
   final List<AttendanceRecord> attendance;
   final String? errorMessage;
 
+  /// The staff member is being deleted: the screen waits.
+  final bool deleting;
+
   @override
-  List<Object?> get props => [status, staff?.id, attendance, errorMessage];
+  List<Object?> get props => [status, staff?.id, attendance, errorMessage, deleting];
 }

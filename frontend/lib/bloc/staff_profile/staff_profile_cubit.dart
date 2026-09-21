@@ -21,4 +21,20 @@ class StaffProfileCubit extends Cubit<StaffProfileState> {
       emit(StaffProfileState(status: StaffProfileStatus.error, errorMessage: e.message));
     }
   }
+
+  /// Deletes this staff member for good. Returns null once it is done, or a message
+  /// for the admin if it could not be (the profile stays as it was).
+  Future<String?> delete() async {
+    if (state.deleting) return null;
+    emit(StaffProfileState(status: state.status, staff: state.staff, attendance: state.attendance, deleting: true));
+    try {
+      await _service.delete(staffId);
+      return null;
+    } on ApiException catch (e) {
+      if (!isClosed) {
+        emit(StaffProfileState(status: state.status, staff: state.staff, attendance: state.attendance));
+      }
+      return e.message;
+    }
+  }
 }

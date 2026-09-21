@@ -6,8 +6,8 @@ import '../models/staff.dart';
 import '../utils/http/api_client.dart';
 import '../config/env.dart';
 
-/// Everything about staff members: the list, creating one, a single profile,
-/// enrolling a face, and a member's attendance history. Talks to the backend
+/// Everything about staff members: the list, creating one, deleting one, a single
+/// profile, enrolling a face, and a member's attendance history. Talks to the backend
 /// and returns models, so screens and cubits never see raw JSON.
 class StaffService {
   StaffService(this._client);
@@ -25,6 +25,13 @@ class StaffService {
     return runApiCall(() async {
       final response = await _client.dio.post('/staff', data: {'name': name, 'employeeId': employeeId});
       return Staff.fromJson(response.data as Map<String, dynamic>);
+    });
+  }
+
+  /// Permanently deletes a staff member with their face templates and attendance records.
+  Future<void> delete(String id) {
+    return runApiCall(() async {
+      await _client.dio.delete('/staff/$id');
     });
   }
 

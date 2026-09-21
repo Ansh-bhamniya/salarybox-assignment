@@ -11,6 +11,7 @@ staffRoutes.use(requireAuth);
 staffRoutes.get('/', requireRole('admin'), asyncHandler(staffController.list));
 staffRoutes.post('/', requireRole('admin'), asyncHandler(staffController.create));
 staffRoutes.get('/:id', asyncHandler(staffController.getById));
+staffRoutes.delete('/:id', requireRole('admin'), asyncHandler(staffController.remove));
 staffRoutes.post(
   '/:id/enroll',
   requireRole('admin'),

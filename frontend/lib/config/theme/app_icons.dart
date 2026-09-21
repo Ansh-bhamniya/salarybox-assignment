@@ -14,6 +14,7 @@ class AppIcons {
   static const IconData addStaff = Iconsax.user_add;
   static const IconData logout = Iconsax.logout;
   static const IconData refresh = Iconsax.refresh;
+  static const IconData delete = Iconsax.trash;
   static const IconData camera = Iconsax.camera;
   static const IconData clock = Iconsax.clock;
 
