@@ -7,5 +7,5 @@ frontend/android/build/
 
 # AI tool skills
 .agents/
-.claude/skills/
+**/.claude/skills/
 skills-lock.json
