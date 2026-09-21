@@ -37,8 +37,8 @@ typedef Locator = Future<({double latitude, double longitude})> Function();
 /// the backend never re-derives it, so this cubit is the only place that
 /// decision gets made.
 ///
-/// A check that fails lets the person try again with a new random challenge;
-/// after [maxFailures] failures in a row they are told to ask their admin.
+/// A check that fails lets the person try again with a new random challenge, as
+/// often as they need; every failure is reported to the backend for review.
 /// Recoverable trouble (no network, location off…) drops back to a fresh check
 /// with a message; only "the camera itself won't open" uses
 /// [MarkAttendanceStatus.error].
@@ -49,7 +49,6 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
     required FaceEmbeddingService embeddingService,
     required StaffService staffService,
     required AttendanceService attendanceService,
-    this.maxFailures = 3,
     this.finalFrames = 5,
     bool? framesMirrored,
     Random? random,
@@ -81,9 +80,6 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
   final Future<String> Function() _newPhotoPath;
   final DateTime Function() _clock;
 
-  /// How many failed checks in a row lock the screen.
-  final int maxFailures;
-
   /// How many of the last frames of the final look-straight are embedded and averaged. One live
   /// frame is noisy (a still of the same face scores 0.85+, a single video frame 0.5-0.8).
   final int finalFrames;
@@ -109,17 +105,16 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
   CameraCaptureController get camera => _camera;
 
   Future<void> initializeCamera() async {
-    emit(MarkAttendanceState(failedAttempts: state.failedAttempts));
+    emit(const MarkAttendanceState());
     try {
       await _camera.initialize();
       _watchdog ??= Timer.periodic(const Duration(milliseconds: 500), (_) => _checkForStall());
-      emit(MarkAttendanceState(status: MarkAttendanceStatus.cameraReady, failedAttempts: state.failedAttempts));
+      emit(const MarkAttendanceState(status: MarkAttendanceStatus.cameraReady));
     } catch (_) {
       emit(
         MarkAttendanceState(
           status: MarkAttendanceStatus.error,
           errorMessage: 'Could not open the camera. Check that camera access is allowed for this app.',
-          failedAttempts: state.failedAttempts,
         ),
       );
     }
@@ -143,7 +138,7 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
   /// Start a new check after a failure.
   void retry() {
     _startAttempt();
-    emit(MarkAttendanceState(status: MarkAttendanceStatus.cameraReady, failedAttempts: state.failedAttempts));
+    emit(const MarkAttendanceState(status: MarkAttendanceStatus.cameraReady));
   }
 
   // ---- the check ------------------------------------------------------------
@@ -219,7 +214,7 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
   // ---- verifying and recording ---------------------------------------------
 
   Future<void> _verifyAndRecord() async {
-    emit(MarkAttendanceState(status: MarkAttendanceStatus.processing, failedAttempts: state.failedAttempts));
+    emit(const MarkAttendanceState(status: MarkAttendanceStatus.processing));
     try {
       // The staff member's profile is fetched while their frames are being read.
       final staffFuture = _staffService.getById(_staffId);
@@ -349,17 +344,16 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
 
   // ---- outcomes ---------------------------------------------------------------
 
-  /// A check that did not pass: try again, or lock the screen after too many in a row.
+  /// A check that did not pass: the person can try again as often as they like.
   void _failed(String message, {double? similarity, bool matchFailure = false, String? reason}) {
     if (isClosed) return;
-    final attempts = state.failedAttempts + 1;
-    final MarkAttendanceStatus status;
-    if (attempts >= maxFailures) {
-      status = MarkAttendanceStatus.lockedOut;
-    } else {
-      status = matchFailure ? MarkAttendanceStatus.matchFailed : MarkAttendanceStatus.livenessFailed;
-    }
-    emit(MarkAttendanceState(status: status, similarity: similarity, errorMessage: message, failedAttempts: attempts));
+    emit(
+      MarkAttendanceState(
+        status: matchFailure ? MarkAttendanceStatus.matchFailed : MarkAttendanceStatus.livenessFailed,
+        similarity: similarity,
+        errorMessage: message,
+      ),
+    );
 
     // Let the backend know, so failures can be reviewed. It must never change what the person sees.
     unawaited(
@@ -373,13 +367,7 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
   void _backToCamera(String message) {
     if (isClosed) return;
     _startAttempt();
-    emit(
-      MarkAttendanceState(
-        status: MarkAttendanceStatus.cameraReady,
-        errorMessage: message,
-        failedAttempts: state.failedAttempts,
-      ),
-    );
+    emit(MarkAttendanceState(status: MarkAttendanceStatus.cameraReady, errorMessage: message));
   }
 
   @override

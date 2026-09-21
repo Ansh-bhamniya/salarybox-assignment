@@ -86,7 +86,7 @@ String _staffJson({String modelVersion = 'mobilefacenet-192-v1', bool templates 
 
 /// A cubit wired to fakes, and a way to play a whole head-turn check into it.
 class _Harness {
-  _Harness({List<List<double>>? embeddings, String? staff, this.locate, this.maxFailures = 3, this.finalFrames = 1})
+  _Harness({List<List<double>>? embeddings, String? staff, this.locate, this.finalFrames = 1})
     : adapter = FakeHttpAdapter()..body = staff ?? _staffJson() {
     embeddingService = _FakeEmbeddings(
       embeddings ?? [_atCos(0.95), _atCos(0.85), _atCos(0.8), _atCos(0.9)], // start, turn 1, turn 2, final
@@ -101,7 +101,6 @@ class _Harness {
       embeddingService: embeddingService,
       staffService: StaffService(client),
       attendanceService: AttendanceService(client),
-      maxFailures: maxFailures,
       finalFrames: finalFrames,
       framesMirrored: true,
       random: Random(1),
@@ -117,7 +116,6 @@ class _Harness {
 
   final FakeHttpAdapter adapter;
   final Future<({double latitude, double longitude})> Function()? locate;
-  final int maxFailures;
   final int finalFrames;
   late final _FakeEmbeddings embeddingService;
   late final _FakeCamera camera;
@@ -280,7 +278,6 @@ void main() {
       await h.doTheCheck();
 
       expect(h.cubit.state.status, MarkAttendanceStatus.matchFailed);
-      expect(h.cubit.state.failedAttempts, 1);
       expect(h.cubit.state.similarity, closeTo(0, 1e-6));
       expect(h.uploads, isEmpty);
     });
@@ -293,18 +290,16 @@ void main() {
 
       expect(h.cubit.state.status, MarkAttendanceStatus.livenessFailed);
       expect(h.cubit.state.errorMessage, contains('face changed'));
-      expect(h.cubit.state.failedAttempts, 1);
       expect(h.uploads, isEmpty);
     });
 
-    test('a person with no enrolled face is sent back with a message, not locked out', () async {
+    test('a person with no enrolled face is sent back with a message, not blamed', () async {
       final h = _Harness(staff: _staffJson(templates: false));
       await h.start();
       await h.doTheCheck();
 
       expect(h.cubit.state.status, MarkAttendanceStatus.cameraReady);
       expect(h.cubit.state.errorMessage, contains("hasn't been enrolled"));
-      expect(h.cubit.state.failedAttempts, 0);
       expect(h.uploads, isEmpty);
     });
 
@@ -326,40 +321,29 @@ void main() {
 
       expect(h.cubit.state.status, MarkAttendanceStatus.livenessFailed);
       expect(h.cubit.state.errorMessage, contains('wrong way'));
-      expect(h.cubit.state.failedAttempts, 1);
 
       h.cubit.retry();
 
       expect(h.cubit.state.status, MarkAttendanceStatus.cameraReady);
-      expect(h.cubit.state.failedAttempts, 1, reason: 'remembered until a success');
       expect(h.cubit.guidance.value.phase, LivenessPhase.waitingForFace);
     });
 
-    test('three in a row lock the screen, and the message says to ask an admin', () async {
+    test('there is no limit: many failures in a row still let the person try again', () async {
       final h = _Harness();
       await h.start();
 
-      for (var attempt = 1; attempt <= 3; attempt++) {
+      for (var attempt = 1; attempt <= 6; attempt++) {
         h.failTheCheck();
-        if (attempt < 3) {
-          expect(h.cubit.state.status, MarkAttendanceStatus.livenessFailed);
-          h.cubit.retry();
-        }
+        expect(h.cubit.state.status, MarkAttendanceStatus.livenessFailed);
+        h.cubit.retry();
+        expect(h.cubit.state.status, MarkAttendanceStatus.cameraReady);
       }
 
-      expect(h.cubit.state.status, MarkAttendanceStatus.lockedOut);
-      expect(h.cubit.state.failedAttempts, 3);
-      expect(h.uploads, isEmpty);
+      await h.doTheCheck();
+      expect(h.cubit.state.status, MarkAttendanceStatus.success);
     });
 
-    test('the number of tries is configurable', () async {
-      final h = _Harness(maxFailures: 1);
-      await h.start();
-      h.failTheCheck();
-      expect(h.cubit.state.status, MarkAttendanceStatus.lockedOut);
-    });
-
-    test('a success is a clean slate: the count of failures does not carry into it', () async {
+    test('a success after failures is recorded as usual', () async {
       final h = _Harness();
       await h.start();
       h.failTheCheck();
@@ -368,7 +352,6 @@ void main() {
       await h.doTheCheck();
 
       expect(h.cubit.state.status, MarkAttendanceStatus.success);
-      expect(h.cubit.state.failedAttempts, 0);
     });
 
     test('a face that vanishes for good fails the check', () async {
@@ -406,7 +389,6 @@ void main() {
 
       expect(h.cubit.state.status, MarkAttendanceStatus.cameraReady);
       expect(h.cubit.state.errorMessage, isNotNull);
-      expect(h.cubit.state.failedAttempts, 0);
       expect(h.uploads, isEmpty);
     });
 
@@ -535,7 +517,7 @@ void main() {
       ]);
     });
 
-    test('every failure in a row is reported, including the one that locks the screen', () async {
+    test('every failure in a row is reported, and the screen stays usable', () async {
       final h = _Harness();
       await h.start();
       for (var i = 0; i < 3; i++) {
@@ -545,7 +527,7 @@ void main() {
       await pumpEventQueue();
 
       expect(h.reports.length, 3);
-      expect(h.cubit.state.status, MarkAttendanceStatus.lockedOut);
+      expect(h.cubit.state.status, MarkAttendanceStatus.livenessFailed);
     });
 
     test('a success reports nothing', () async {

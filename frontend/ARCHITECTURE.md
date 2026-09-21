@@ -40,7 +40,7 @@ frontend/
 │   │   ├── onboarding/            # first-run intro: 3 swipeable pages, shown once
 │   │   ├── login/                 # login_screen.dart
 │   │   ├── staff_home/            # staff_home_screen.dart (+ staff_home_widgets.dart)
-│   │   ├── mark_attendance/       # head-turn check, then check-in (a failed check can be retried; three in a row lock the screen)
+│   │   ├── mark_attendance/       # head-turn check, then check-in (a failed check can be retried as often as needed)
 │   │   ├── face_enrolment/        # admin: 3 auto-captured photos, review, save (re-enrol asks a reason; a duplicate-face warning can be overridden)
 │   │   ├── staff_list/  add_staff/  staff_profile/      # admin screens
 │   │
@@ -186,9 +186,8 @@ during the turns must be the same face as it — so whoever did the turns is who
 recorded. Then location and time are captured and the record is uploaded with the
 last frame as the photo and a summary of what the check saw.
 
-A failed check is reported to the backend and can be retried; three in a row lock
-the screen ("ask your admin"). Network and location trouble start a fresh check
-without counting. A watchdog fails the check if the camera stops delivering frames.
+A failed check is reported to the backend and can be retried as often as needed;
+there is no lockout. Network and location trouble start a fresh check. A watchdog fails the check if the camera stops delivering frames.
 
 ## Matching
 
