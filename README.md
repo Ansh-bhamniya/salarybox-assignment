@@ -6,7 +6,7 @@ A two-role attendance app. An **admin** adds staff and enrols their faces; **sta
 - **Backend** — Node.js + Express API, in `backend/`, deployed on Vercel
 - **Data** — Supabase (Postgres for records, Storage for photos)
 
-Face detection (Google ML Kit) and face matching (bundled MobileFaceNet TFLite model) both run **on the phone**. The backend never sees a photo and decides who it is — it stores what the app already decided. See [`PRD.md`](PRD.md) for the full design.
+Face detection (Google ML Kit) and face matching (bundled MobileFaceNet TFLite model) both run **on the phone**. The backend never sees a photo and decides who it is — it stores what the app already decided. See [`backend/ARCHITECTURE.md`](backend/ARCHITECTURE.md) and [`frontend/ARCHITECTURE.md`](frontend/ARCHITECTURE.md) for the design.
 
 ```
 Flutter app ──REST/JSON──▶ Express API (Vercel) ──supabase-js──▶ Supabase (Postgres + Storage)
