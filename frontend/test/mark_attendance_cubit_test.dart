@@ -86,7 +86,7 @@ String _staffJson({String modelVersion = 'mobilefacenet-192-v1', bool templates 
 
 /// A cubit wired to fakes, and a way to play a whole head-turn check into it.
 class _Harness {
-  _Harness({List<List<double>>? embeddings, String? staff, this.locate, this.maxFailures = 3})
+  _Harness({List<List<double>>? embeddings, String? staff, this.locate, this.maxFailures = 3, this.finalFrames = 1})
     : adapter = FakeHttpAdapter()..body = staff ?? _staffJson() {
     embeddingService = _FakeEmbeddings(
       embeddings ?? [_atCos(0.95), _atCos(0.85), _atCos(0.8), _atCos(0.9)], // start, turn 1, turn 2, final
@@ -102,6 +102,7 @@ class _Harness {
       staffService: StaffService(client),
       attendanceService: AttendanceService(client),
       maxFailures: maxFailures,
+      finalFrames: finalFrames,
       framesMirrored: true,
       random: Random(1),
       locate: locate ?? () async => (latitude: 28.6139, longitude: 77.209),
@@ -117,6 +118,7 @@ class _Harness {
   final FakeHttpAdapter adapter;
   final Future<({double latitude, double longitude})> Function()? locate;
   final int maxFailures;
+  final int finalFrames;
   late final _FakeEmbeddings embeddingService;
   late final _FakeCamera camera;
   late final File photo;
@@ -577,6 +579,77 @@ void main() {
       expect(h.cubit.state.status, MarkAttendanceStatus.livenessFailed);
       expect(h.cubit.state.errorMessage, contains('wrong way'));
       expect(h.reports.length, 1, reason: 'it was attempted');
+    });
+  });
+
+  group('the last few frames are averaged, because one video frame is noisy', () {
+    // Results, in the order the cubit asks for them: start, turn 1, turn 2, then each final frame.
+    List<List<double>> results(List<List<double>> finals) => [_atCos(0.9), _atCos(0.9), _atCos(0.9), ...finals];
+
+    test('a bad frame among good ones does not sink the check', () async {
+      // The last frame alone (orthogonal to the enrolled face) would be rejected; its four neighbours are fine.
+      final finals = [_axis(0), _axis(0), _axis(0), _axis(0), _axis(2)];
+      final h = _Harness(embeddings: results(finals), finalFrames: 5);
+      await h.start();
+      await h.doTheCheck();
+
+      expect(h.cubit.state.status, MarkAttendanceStatus.success);
+      expect(
+        h.cubit.state.similarity,
+        closeTo(0.8 / sqrt(0.64 + 0.04), 1e-6),
+        reason: 'the average, not the last frame',
+      );
+    });
+
+    test('the same bad frame on its own is rejected: this is what averaging changes', () async {
+      final h = _Harness(embeddings: results([_axis(2)]), finalFrames: 1);
+      await h.start();
+      await h.doTheCheck();
+
+      expect(h.cubit.state.status, MarkAttendanceStatus.matchFailed);
+    });
+
+    test('five frames are embedded, and only the last is saved as the attendance photo', () async {
+      final h = _Harness(embeddings: results(List.generate(5, (_) => _atCos(0.9))), finalFrames: 5);
+      await h.start();
+      await h.doTheCheck();
+
+      final primary = h.embeddingService.calls.where((c) => c.mirrored).toList();
+      expect(primary.length, 3 + 5, reason: 'start, two turns, five final frames');
+      expect(primary.skip(3).map((c) => c.savedTo != null), [false, false, false, false, true]);
+      expect(primary.last.savedTo, h.photo.path);
+    });
+
+    test('drifting during the final hold throws away the frames from before the drift', () async {
+      final h = _Harness(embeddings: results(List.generate(10, (_) => _atCos(0.9))), finalFrames: 10);
+      await h.start();
+      h.neutral(9);
+      for (final side in h.cubit.challenge) {
+        h.turn(side);
+        h.frame();
+      }
+      h.neutral(3); // holding still: frames start to be remembered
+      for (var i = 0; i < 3; i++) {
+        h.frame(yaw: 15, ratio: 0.12); // drifted off straight: the hold starts over
+      }
+      h.neutral(8);
+      await pumpEventQueue();
+
+      final primary = h.embeddingService.calls.where((c) => c.mirrored).length;
+      expect(h.cubit.state.status, MarkAttendanceStatus.success);
+      expect(primary, 3 + 5, reason: 'only the five frames of the hold that finished, not the ones before the drift');
+    });
+
+    test('a face that is someone else in the final frames is still caught by the same-person check', () async {
+      final h = _Harness(
+        embeddings: [_axis(3), _axis(3), _axis(3), ...List.generate(5, (_) => _atCos(0.9))],
+        finalFrames: 5,
+      );
+      await h.start();
+      await h.doTheCheck();
+
+      expect(h.cubit.state.status, MarkAttendanceStatus.livenessFailed);
+      expect(h.cubit.state.errorMessage, contains('face changed'));
     });
   });
 }

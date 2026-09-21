@@ -9,6 +9,7 @@ import '../../config/env.dart';
 import '../../utils/http/api_exception.dart';
 import '../../services/camera_capture_controller.dart';
 import '../../services/face_embedding_service.dart';
+import '../../services/face_similarity.dart';
 import '../../services/liveness/camera_frame.dart';
 import '../../services/liveness/face_observation.dart';
 import '../../services/liveness/liveness_analyzer.dart';
@@ -49,6 +50,7 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
     required StaffService staffService,
     required AttendanceService attendanceService,
     this.maxFailures = 3,
+    this.finalFrames = 5,
     bool? framesMirrored,
     Random? random,
     Locator? locate,
@@ -82,9 +84,14 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
   /// How many failed checks in a row lock the screen.
   final int maxFailures;
 
+  /// How many of the last frames of the final look-straight are embedded and averaged. One live
+  /// frame is noisy (a still of the same face scores 0.85+, a single video frame 0.5-0.8).
+  final int finalFrames;
+
   late LivenessSession _session;
   late LivenessCoach _coach;
   final Map<String, _KeptFrame> _kept = {};
+  final List<_KeptFrame> _recentStraight = [];
 
   /// What to show the person right now (prompt, turn line, ring, message).
   late final ValueNotifier<LivenessGuidance> guidance = ValueNotifier(_coach.idle());
@@ -128,6 +135,7 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
 
     final keep = _session.onObservation(observation);
     if (keep != null) _keepFrame(keep, frame);
+    _trackStraight(frame);
     guidance.value = _coach.coach(observation);
     _react();
   }
@@ -144,6 +152,7 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
     _session = LivenessSession.random(_random);
     _coach = LivenessCoach(_session);
     _kept.clear();
+    _recentStraight.clear();
     _lastFrameAt = null;
     _passedAt = null;
     if (!isClosed) guidance.value = _coach.idle();
@@ -162,6 +171,22 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
       FrameRole.finalStraight => 'final',
     };
     _kept[key] = _KeptFrame(copy, box);
+  }
+
+  /// While the person holds still at the end, remembers the last few frames so they can all be used.
+  void _trackStraight(AnalyzedFrame frame) {
+    final phase = _session.phase;
+    if (phase == LivenessPhase.lookStraight && _session.holdProgress == 0) {
+      _recentStraight.clear(); // not (or no longer) holding still
+      return;
+    }
+    if (phase != LivenessPhase.lookStraight && phase != LivenessPhase.passed) return;
+
+    final box = frame.faceBox;
+    final copy = frame.snapshot();
+    if (box == null || copy == null) return;
+    _recentStraight.add(_KeptFrame(copy, box));
+    if (_recentStraight.length > finalFrames) _recentStraight.removeAt(0);
   }
 
   void _react() {
@@ -212,7 +237,15 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
       for (final frame in [start, ...turns.cast<_KeptFrame>()]) {
         others.add((await _embed(frame)).embedding);
       }
-      final finalSample = await _embed(end, saveJpegTo: photoPath);
+
+      // The last few frames of the look-straight, averaged; the very last one is the attendance photo.
+      final finals = _recentStraight.isEmpty ? [end] : List.of(_recentStraight);
+      final finalEmbeddings = <List<double>>[];
+      for (var i = 0; i < finals.length; i++) {
+        final isLast = i == finals.length - 1;
+        finalEmbeddings.add((await _embed(finals[i], saveJpegTo: isLast ? photoPath : null)).embedding);
+      }
+      final finalSample = FaceSample(embedding: averageEmbeddings(finalEmbeddings), imagePath: photoPath);
 
       final staff = await staffFuture;
       // Only templates made by this build's face model are comparable.
@@ -233,7 +266,7 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
         sameFaceMin: Env.enrolmentMinSimilarity,
         expectedOthers: 1 + _session.totalTurns,
       );
-      if (!kReleaseMode) await _logIdentity(identity, end, templates, finalSample);
+      if (!kReleaseMode) await _logIdentity(identity, finals.last, templates, finalEmbeddings, finalSample);
 
       switch (identity.failure) {
         case null:
@@ -289,21 +322,24 @@ class MarkAttendanceCubit extends Cubit<MarkAttendanceState> {
   Future<FaceSample> _embed(_KeptFrame kept, {String? saveJpegTo}) =>
       _embeddingService.embedFrame(kept.frame, kept.box, framesMirrored: _framesMirrored, saveJpegTo: saveJpegTo);
 
-  /// Debug builds only: how the final frame scored against the enrolled faces, and what it would
-  /// have scored the other way round — the quickest way to confirm on a device that the stream
-  /// really is (or isn't) mirrored.
+  /// Debug builds only: how each of the final frames scored against the enrolled faces, and how
+  /// their average did, so the effect of averaging can be seen; plus how the last frame would have
+  /// scored the other way round (the quickest check that a device's mirroring is what we assume;
+  /// embeddings are nearly flip-proof, so the two usually differ by little).
   Future<void> _logIdentity(
     LivenessIdentityResult identity,
-    _KeptFrame end,
+    _KeptFrame last,
     List<List<double>> templates,
-    FaceSample finalSample,
+    List<List<double>> finalEmbeddings,
+    FaceSample averaged,
   ) async {
+    double best(List<double> e) => templates.map((t) => cosineSimilarity(t, e)).reduce(max);
     try {
-      final other = await _embeddingService.embedFrame(end.frame, end.box, framesMirrored: !_framesMirrored);
-      final otherBest = templates.map((t) => _embeddingService.compare(t, other.embedding).similarity).reduce(max);
+      final other = await _embeddingService.embedFrame(last.frame, last.box, framesMirrored: !_framesMirrored);
+      final perFrame = finalEmbeddings.map((e) => best(e).toStringAsFixed(3)).join(', ');
       debugPrint(
-        '[attendance] identity: final vs enrolled ${identity.similarityToEnrolled.toStringAsFixed(3)} '
-        '(mirrored=$_framesMirrored), other way round ${otherBest.toStringAsFixed(3)}; '
+        '[attendance] identity: frames [$perFrame] -> averaged ${best(averaged.embedding).toStringAsFixed(3)} '
+        '(mirrored=$_framesMirrored; last frame the other way round ${best(other.embedding).toStringAsFixed(3)}); '
         'lowest same-face ${identity.lowestSameFace?.toStringAsFixed(3)}; failure=${identity.failure?.name}',
       );
     } catch (e) {
