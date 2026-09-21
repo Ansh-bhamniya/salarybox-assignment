@@ -80,21 +80,28 @@ class _FaceEnrolmentViewState extends State<_FaceEnrolmentView> {
 
   @override
   Widget build(BuildContext context) {
+    // The camera is always dark; the review of the photos afterwards follows the app's light or dark theme.
+    final followsTheme = context.select<FaceCaptureCubit, bool>(
+      (cubit) => cubit.state.status == FaceCaptureStatus.ready,
+    );
+    final theme = Theme.of(context);
+    final foreground = followsTheme ? theme.colorScheme.onSurface : Colors.white;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: followsTheme ? theme.colorScheme.surface : Colors.black,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        leading: const AppBackButton(onDark: true),
+        leading: AppBackButton(onDark: !followsTheme),
         leadingWidth: AppBackButton.leadingWidth,
         title: Text('Enrol face — ${widget.staffName}'),
-        titleTextStyle: Theme.of(
-          context,
-        ).textTheme.titleLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+        titleTextStyle: theme.textTheme.titleLarge?.copyWith(color: foreground, fontWeight: FontWeight.w800),
         backgroundColor: Colors.transparent,
-        foregroundColor: Colors.white,
+        foregroundColor: foreground,
         elevation: 0,
         scrolledUnderElevation: 0,
-        systemOverlayStyle: SystemUiOverlayStyle.light,
+        systemOverlayStyle: followsTheme
+            ? (theme.brightness == Brightness.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+            : SystemUiOverlayStyle.light,
       ),
       body: BlocListener<FaceCaptureCubit, FaceCaptureState>(
         listenWhen: (previous, current) => current.errorMessage != null,
@@ -211,7 +218,7 @@ class _ReviewView extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: ShapeDecoration(
-                      shape: OvalBorder(side: BorderSide(color: theme.colorScheme.primaryFixedDim, width: 3)),
+                      shape: OvalBorder(side: BorderSide(color: theme.colorScheme.primary, width: 3)),
                     ),
                     // The live preview is mirrored but the saved photo isn't,
                     // so un-flipped it would "jump" the moment you tap the
@@ -253,34 +260,23 @@ class _ReviewView extends StatelessWidget {
             Text(
               '${shots.length} photo${shots.length == 1 ? '' : 's'} captured',
               textAlign: TextAlign.center,
-              style: theme.textTheme.titleLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: AppSpacing.s),
             Text(
               'Check that the face is clear and well lit in each one.',
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70, height: 1.4),
+              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant, height: 1.4),
             ),
             const SizedBox(height: AppSpacing.section),
             SizedBox(
               width: double.infinity,
-              child: FilledButton(
-                onPressed: onSave,
-                style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black),
-                child: const Text('Save enrolment'),
-              ),
+              child: FilledButton(onPressed: onSave, child: const Text('Save enrolment')),
             ),
             const SizedBox(height: AppSpacing.m),
             SizedBox(
               width: double.infinity,
-              child: FilledButton(
-                onPressed: onRetake,
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: 0.14),
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('Retake all'),
-              ),
+              child: OutlinedButton(onPressed: onRetake, child: const Text('Retake all')),
             ),
             const SizedBox(height: AppSpacing.l),
           ],
