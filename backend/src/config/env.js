@@ -16,6 +16,14 @@ function duplicateFaceThreshold() {
   return value;
 }
 
+function positiveInt(name, fallback) {
+  const value = Number(process.env[name] ?? fallback);
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`${name} must be a whole number of at least 1`);
+  }
+  return value;
+}
+
 export const env = {
   port: process.env.PORT || 4000,
   supabaseUrl: required('SUPABASE_URL'),
@@ -23,8 +31,15 @@ export const env = {
   jwtSecret: required('JWT_SECRET'),
   // Assignment explicitly allows dummy credentials. Every enrolled staff
   // member shares this one password rather than having individual accounts.
+  staffDummyPassword: process.env.STAFF_DUMMY_PASSWORD || 'staff123',
   // Cosine similarity at or above which a face being enrolled is treated as
   // "already enrolled under another staff member".
   duplicateFaceThreshold: duplicateFaceThreshold(),
-  staffDummyPassword: process.env.STAFF_DUMMY_PASSWORD || 'staff123',
+  // When on, attendance without a passed head-turn check is refused. Off by
+  // default so app builds that predate the check keep working; turn it on once
+  // everyone has updated. (The server cannot verify the claim: a modified app
+  // could forge it. It is an audit trail, not a defence.)
+  livenessRequired: process.env.LIVENESS_REQUIRED === 'true',
+  // How many failed-check reports one staff member may log per hour.
+  attemptsPerHour: positiveInt('ATTEMPTS_PER_HOUR', 60),
 };

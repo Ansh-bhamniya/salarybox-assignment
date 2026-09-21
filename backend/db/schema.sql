@@ -66,8 +66,10 @@ create table if not exists face_templates (
 create index if not exists face_templates_active_idx
   on face_templates (staff_id) where status = 'active';
 
--- Attendance attempts the server refused. Known outcomes: 'not_enrolled'.
--- (More will land with match calibration and liveness.)
+-- Attendance attempts that did not end in a record. Known outcomes:
+--   not_enrolled     the server refused: the person has no active face
+--   liveness_failed  the app reported that the head-turn check did not pass
+--   no_match         the app reported that the face did not match the enrolled one
 create table if not exists attendance_attempts (
   id uuid primary key default gen_random_uuid(),
   staff_id uuid not null references staff(id) on delete cascade,
@@ -95,6 +97,11 @@ create index if not exists audit_log_target_idx
 
 -- Which face-model version the matched template came from.
 alter table attendance add column if not exists model_version text;
+
+-- What the app's head-turn check saw (which turns, how long, how far, how alike
+-- the person looked throughout), for the audit trail. Null for records made by
+-- app builds that predate the check.
+alter table attendance add column if not exists liveness jsonb;
 
 -- Per-shot ordering (shot 0 is the frontal one) and a pgvector copy of each
 -- embedding for nearest-neighbour search. `embedding` (double precision[]) stays

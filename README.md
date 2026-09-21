@@ -86,6 +86,8 @@ npm run dev               # http://localhost:4000
 | `JWT_SECRET`                | yes      | Any long random string                             |
 | `STAFF_DUMMY_PASSWORD`      | no       | Shared staff password, defaults to `staff123`      |
 | `DUPLICATE_FACE_THRESHOLD`  | no       | Cosine similarity (0–1] at which a face being enrolled counts as "already enrolled under someone else"; defaults to `0.6` |
+| `LIVENESS_REQUIRED`         | no       | `true` refuses attendance that doesn't carry a passed head-turn check (409 `liveness_required`). Off by default so older app builds keep working |
+| `ATTEMPTS_PER_HOUR`         | no       | How many failed-check reports one staff member may log per hour; defaults to `60` |
 | `PORT`                      | no       | Defaults to `4000`                                 |
 
 `.env.example` also lists `DATABASE_PASSWORD`; the server does not read it.
@@ -127,7 +129,7 @@ The backend tests cover input validation and error responses; they don't need a 
 
 1. **Admin** logs in → **Staff list** → **Add staff** (name + Employee ID).
 2. **Face enrolment:** the front camera takes three photos (straight, slightly left, slightly right). For each, ML Kit detects and crops the face and the TFLite model produces an embedding; the photos and embeddings are uploaded together. If the face already belongs to another staff member the server refuses, and the admin can override with a reason that is audited.
-3. **Staff** logs in with their Employee ID → **Mark attendance:** selfie → face detected → embedding compared (cosine similarity) with the enrolled one, fetched fresh from the backend → if it matches, GPS location and timestamp are captured and the record is uploaded. If it doesn't match, nothing is saved.
+3. **Staff** logs in with their Employee ID → **Mark attendance:** there is no shutter. The person turns their head to one side, then the other (in a random order each time), then looks straight, while the live camera is watched. Frames from that check itself are kept — before the turns, at each turn, and at the end. The final straight frame must match the person's enrolled faces (fetched fresh from the backend; best score across their templates), and the other frames must be the same face as it, so whoever did the turns is who gets recorded. Only then are GPS location and time captured and the record uploaded, with the final frame as the photo and a summary of what the check saw. A check that fails can be retried with a new challenge; after three failures in a row the screen tells the person to ask their admin. Failed checks are reported to the backend.
 4. **Admin** opens a staff profile to see their history: selfie, date, time, and latitude/longitude for each record.
 
 ### API
@@ -140,7 +142,8 @@ The backend tests cover input validation and error responses; they don't need a 
 | GET    | `/staff/:id`             | admin, or self | Profile including the active face templates |
 | POST   | `/staff/:id/enroll`      | admin          | Upload 1–5 captures: `photos` + `embeddings` (+ `modelVersion`, `reason`, `allowDuplicate`). 409 `duplicate_face` if the face matches another staff member. The original single `photo` + `embedding` form is still accepted |
 | GET    | `/staff/:id/attendance`  | admin, or self | Attendance history                      |
-| POST   | `/attendance`            | staff (self)   | Record attendance (multipart selfie). 409 `not_enrolled` if the person has no active face |
+| POST   | `/attendance`            | staff (self)   | Record attendance (multipart selfie, plus an optional `liveness` JSON: what the head-turn check saw). 409 `not_enrolled` if the person has no active face; 409 `liveness_required` if the server requires the check and none was sent |
+| POST   | `/attendance/attempts`   | staff (self)   | Report a failed check: `outcome` (`liveness_failed` or `no_match`) and an optional short `reason`. Capped per hour |
 
 ## Assumptions and limitations
 
@@ -152,7 +155,8 @@ The backend tests cover input validation and error responses; they don't need a 
 
 **Face matching**
 
-- There is **no liveness or anti-spoofing** check. A printed photo or a photo on another screen could pass.
+- Attendance needs a **head-turn check** (turn left and right in a random order, then look straight), which a still photo — printed or on another screen — cannot pass, and neither can a photo that is rotated like a head (the nose does not move against the eyes). It does **not** stop a video replay of the person turning, a 3D mask, or a modified app. The check runs on the phone: the server stores what the app says it saw (`attendance.liveness`) and can require it (`LIVENESS_REQUIRED`), but cannot verify the claim. Stopping those needs a passive anti-spoof model and server-side verification with app attestation, which are not built.
+- The head-turn check was measured and tuned on an **iPhone only**. The direction rule comes from face geometry so it should carry over, but Android's frame format and mirroring have not been verified on a device. The thresholds are provisional until tested against real attacks.
 - The match threshold (`0.55` cosine similarity, in `frontend/lib/config/env.dart`) was calibrated offline on public LFW photos, not on real enrolment/selfie pairs from this app. Expect to tune it. Build with `--dart-define=SHOW_MATCH_SCORE=true` to show the raw score on the result screen while calibrating.
 - Each person is enrolled from three photos and matched against all of them (best score wins). Re-enrolling replaces the whole set; the old templates are kept, marked revoked, with a reason and an audit entry. Templates never update themselves from later selfies, and staff are not notified when they are re-enrolled.
 - Duplicate-face detection compares a new enrolment with everyone else's active templates (pgvector, same face-model version only). Its threshold (`DUPLICATE_FACE_THRESHOLD`, default 0.6) is a provisional guess until calibrated on real photos, so it can miss a match or flag a lookalike; an admin can override a flag with a reason. Two enrolments of the same face at the very same moment could both slip through.

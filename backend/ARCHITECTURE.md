@@ -108,6 +108,25 @@ length) before they are stored. Row level security is on for every table with
 no policies: only the API's service-role key can read or write them, and the
 functions are executable by the service role only.
 
+## The head-turn check
+
+The app runs a head-turn check on the phone before it records attendance and
+sends a small summary of what it saw as an optional `liveness` field on
+`POST /attendance`. `utils/liveness.js` validates it (version, 1-4 turns each
+`left`/`right`, a plausible duration, one peak per turn, sane numbers), keeps
+only the known fields and caps the size, and it is stored in `attendance.liveness`
+(jsonb). With `LIVENESS_REQUIRED=true` a record without one is refused (409
+`liveness_required`); it is off by default so older app builds keep working.
+
+The server cannot verify any of this: a modified app could forge the summary. It
+is an audit trail and a way to require the app to have done the check, not a
+defence against a determined attacker.
+
+`POST /attendance/attempts` (staff, about themselves) lets the app report a
+failed check (`liveness_failed`) or a face that did not match (`no_match`), with
+an optional short reason, into `attendance_attempts` so failures can be reviewed.
+It is capped per person per hour (`ATTEMPTS_PER_HOUR`).
+
 ## Env vars (`.env`)
 
 ```
