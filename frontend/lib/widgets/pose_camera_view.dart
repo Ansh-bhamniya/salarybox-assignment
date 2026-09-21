@@ -127,8 +127,8 @@ class _PoseCameraViewState extends State<PoseCameraView> with WidgetsBindingObse
                       segmentsDone: guidance.ringDone,
                     ),
                   ),
-                  // Under the oval: the turn line (as wide as the oval), which step this is and what to do in
-                  // it, then how it is going, a little further down.
+                  // Under the oval: the turn line (as wide as the oval), what to do (the one highlighted
+                  // line), then how it is going, a little further down.
                   Positioned(
                     left: 16,
                     right: 16,
@@ -145,13 +145,21 @@ class _PoseCameraViewState extends State<PoseCameraView> with WidgetsBindingObse
                             inPosition: guidance.good,
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        _ShotPrompt(guidance: guidance),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 18),
                         _Instruction(guidance: guidance),
                         const SizedBox(height: 22),
                         _MessagePill(guidance: guidance),
                       ],
+                    ),
+                  ),
+                  // Which step this is, at the bottom of the screen.
+                  SafeArea(
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _ShotPrompt(guidance: guidance),
+                      ),
                     ),
                   ),
                 ],
@@ -164,7 +172,7 @@ class _PoseCameraViewState extends State<PoseCameraView> with WidgetsBindingObse
   }
 }
 
-/// "Photo 2 of 3" with one dot per photo, shown under the oval.
+/// "Photo 2 of 3" with one dot per photo, at the bottom of the screen.
 class _ShotPrompt extends StatelessWidget {
   const _ShotPrompt({required this.guidance});
 
@@ -204,7 +212,8 @@ class _ShotPrompt extends StatelessWidget {
   }
 }
 
-/// What to do for this step, e.g. "Turn your head to the left", under the oval.
+/// What to do for this step, e.g. "Turn your head to the left", under the oval. It is the only
+/// highlighted text on the screen: on the accent colour, so it is what the eye goes to.
 class _Instruction extends StatelessWidget {
   const _Instruction({required this.guidance});
 
@@ -212,20 +221,29 @@ class _Instruction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
     return Semantics(
-      label: guidance.prompt,
+      label: '${guidance.heading}. ${guidance.prompt}',
       child: ExcludeSemantics(
-        child: Text(
-          guidance.prompt,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(color: scheme.primaryFixedDim, borderRadius: AppRadius.pillBorder),
+          child: Text(
+            guidance.prompt,
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(color: scheme.onPrimaryFixed, fontWeight: FontWeight.w800),
+          ),
         ),
       ),
     );
   }
 }
 
-/// The one short sentence that says what to change (or "hold still").
+/// The one short sentence that says what to change (or "hold still"): plain text over the camera,
+/// so the highlighted instruction above it stays the one thing that stands out.
 class _MessagePill extends StatelessWidget {
   const _MessagePill({required this.guidance});
 
@@ -233,34 +251,29 @@ class _MessagePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final good = guidance.good;
-    // "Good" uses the accent, so its text must be the colour meant for it
-    // (white on green in light mode, black on white in dark mode).
-    final foreground = good ? scheme.onPrimary : Colors.white;
+    final accent = Theme.of(context).colorScheme.primaryFixedDim;
+    const shadows = [Shadow(color: Colors.black87, blurRadius: 6)];
 
     return Semantics(
       liveRegion: true,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: good ? scheme.primary.withValues(alpha: 0.92) : Colors.black.withValues(alpha: 0.6),
-          borderRadius: AppRadius.pillBorder,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(good ? AppIcons.checkFilled : AppIcons.face, size: 18, color: foreground),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                guidance.message,
-                style: TextStyle(color: foreground, fontWeight: FontWeight.w600, fontSize: 16),
-              ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            guidance.good ? AppIcons.checkFilled : AppIcons.face,
+            size: 18,
+            color: guidance.good ? accent : Colors.white,
+            shadows: shadows,
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              guidance.message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 16, shadows: shadows),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

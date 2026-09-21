@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../config/theme/app_spacing.dart';
 
-/// Full-screen message for the dark camera screens: a tinted icon, a title,
-/// a short explanation and one or two actions. Used for camera errors,
-/// "face didn't match" and "attendance recorded".
+/// Full-screen message: a tinted icon, a title, a short explanation and one or
+/// two actions. Used for camera errors, "face didn't match" and "attendance
+/// recorded". It is white-on-black by default, for the dark camera screens; with
+/// [onDark] false it follows the app's light or dark theme instead (the screens
+/// that show a result once the camera is gone).
 class CameraStatusView extends StatelessWidget {
   const CameraStatusView({
     super.key,
@@ -15,6 +17,7 @@ class CameraStatusView extends StatelessWidget {
     required this.onPrimary,
     this.secondaryLabel,
     this.onSecondary,
+    this.onDark = true,
   });
 
   final IconData icon;
@@ -25,9 +28,14 @@ class CameraStatusView extends StatelessWidget {
   final VoidCallback onPrimary;
   final String? secondaryLabel;
   final VoidCallback? onSecondary;
+  final bool onDark;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final titleColor = onDark ? Colors.white : scheme.onSurface;
+    final messageColor = onDark ? Colors.white70 : scheme.onSurfaceVariant;
+
     return SafeArea(
       child: Center(
         child: Padding(
@@ -50,33 +58,37 @@ class CameraStatusView extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: Theme.of(
                   context,
-                ).textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+                ).textTheme.headlineSmall?.copyWith(color: titleColor, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: messageColor),
               ),
               const SizedBox(height: 32),
               FilledButton(
                 onPressed: onPrimary,
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
+                style: onDark
+                    ? FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      )
+                    : null,
                 child: Text(primaryLabel),
               ),
               if (secondaryLabel != null) ...[
                 const SizedBox(height: 12),
                 OutlinedButton(
                   onPressed: onSecondary,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Colors.white54),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
+                  style: onDark
+                      ? OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Colors.white54),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        )
+                      : null,
                   child: Text(secondaryLabel!),
                 ),
               ],

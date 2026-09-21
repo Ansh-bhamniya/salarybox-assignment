@@ -32,23 +32,34 @@ class MarkAttendanceScreen extends StatelessWidget {
 class _MarkAttendanceView extends StatelessWidget {
   const _MarkAttendanceView();
 
+  /// The camera is always dark; the screens that show a result (recorded, not recognised, check
+  /// not passed) follow the app's light or dark theme like the rest of the app.
+  static bool _followsTheme(MarkAttendanceStatus status) =>
+      status == MarkAttendanceStatus.success ||
+      status == MarkAttendanceStatus.matchFailed ||
+      status == MarkAttendanceStatus.livenessFailed;
+
   @override
   Widget build(BuildContext context) {
+    final followsTheme = context.select<MarkAttendanceCubit, bool>((cubit) => _followsTheme(cubit.state.status));
+    final theme = Theme.of(context);
+    final foreground = followsTheme ? theme.colorScheme.onSurface : Colors.white;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: followsTheme ? theme.colorScheme.surface : Colors.black,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        leading: const AppBackButton(onDark: true),
+        leading: AppBackButton(onDark: !followsTheme),
         leadingWidth: AppBackButton.leadingWidth,
         title: const Text('Mark attendance'),
-        titleTextStyle: Theme.of(
-          context,
-        ).textTheme.titleLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+        titleTextStyle: theme.textTheme.titleLarge?.copyWith(color: foreground, fontWeight: FontWeight.w800),
         backgroundColor: Colors.transparent,
-        foregroundColor: Colors.white,
+        foregroundColor: foreground,
         elevation: 0,
         scrolledUnderElevation: 0,
-        systemOverlayStyle: SystemUiOverlayStyle.light,
+        systemOverlayStyle: followsTheme
+            ? (theme.brightness == Brightness.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+            : SystemUiOverlayStyle.light,
       ),
       body: BlocConsumer<MarkAttendanceCubit, MarkAttendanceState>(
         listenWhen: (previous, current) =>
@@ -93,6 +104,7 @@ class _MarkAttendanceView extends StatelessWidget {
         return CameraStatusView(
           icon: AppIcons.faceOff,
           color: Theme.of(context).colorScheme.error,
+          onDark: false,
           title: 'Face not recognised',
           message:
               'Your face did not match the enrolled photo, so attendance was not recorded.'
@@ -105,6 +117,7 @@ class _MarkAttendanceView extends StatelessWidget {
         return CameraStatusView(
           icon: AppIcons.faceOff,
           color: Theme.of(context).colorScheme.error,
+          onDark: false,
           title: 'Check not passed',
           message: state.errorMessage ?? 'The head-turn check did not pass.',
           primaryLabel: 'Try again',
@@ -114,7 +127,8 @@ class _MarkAttendanceView extends StatelessWidget {
       case MarkAttendanceStatus.success:
         return CameraStatusView(
           icon: AppIcons.success,
-          color: Theme.of(context).colorScheme.primaryFixedDim,
+          color: Theme.of(context).colorScheme.primary,
+          onDark: false,
           title: 'Attendance recorded',
           message: 'Your face, time and location were saved.${_scoreNote(state)}',
           primaryLabel: 'Done',
