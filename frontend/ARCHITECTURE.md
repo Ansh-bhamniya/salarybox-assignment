@@ -138,6 +138,31 @@ sends everything to `/onboarding` (`OnboardingHelper.seen`, loaded in `main()`);
 finishing or skipping it marks it seen and continues to `/login`. Signed-in
 users are kept off `/onboarding`.
 
+## Head-turn (liveness) building blocks
+
+`services/liveness/` holds the logic behind "turn your head left and right".
+
+- `face_observation.dart` — what one analysed camera frame says: how many faces,
+  the head angle, how far the nose is off the middle of the eyes, and where the
+  face sits.
+- `pose_estimator.dart` — turns ML Kit faces into observations. **Direction comes
+  from the nose, not from ML Kit's head-angle sign** (which is undocumented): in
+  an upright un-mirrored frame, turning to your left moves the nose toward the
+  frame's right. The same signal is the anti-photo cue, because a rotated flat
+  picture doesn't move its nose against its eyes.
+- `liveness_session.dart` — a pure state machine (waiting → hold still → the turns
+  in random order → look straight → passed/failed). Turns are judged against the
+  person's own straight-ahead baseline, with time-based debouncing, timeouts,
+  and specific failures (wrong direction, second face, a face that jumped, angle
+  and nose disagreeing).
+- `liveness_analyzer.dart` — runs ML Kit (accurate mode, landmarks, tracking) on
+  the camera stream: about 28 frames a second on an iPhone.
+- `direction_test.dart` — a guided check of which way is "left" on a device.
+
+Measured on an iPhone: the stream arrives mirrored, and face boxes are relative to
+the upright 720×1280 frame (Android hands over the sideways sensor buffer, so its
+width and height swap: `services/camera_input_image.dart`).
+
 ## Networking
 
 `utils/http/api_client.dart` wraps `dio` with an interceptor that attaches
